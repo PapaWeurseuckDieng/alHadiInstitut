@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      - db
+    env_file: ./backend/.env
+
+  webserver:
+    image: nginx:alpine
+    ports:
+      - "8090:80"          # ports différents de ton stack perso (80 est déjà pris)
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/nginx:/etc/nginx/conf.d
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    ports:
+      - "3310:3306"        # idem, 3306 est déjà pris par ton MySQL perso
+    environment:
+      MYSQL_DATABASE: daara
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - daara_db_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin
+    ports:
+      - "8091:80"
+    depends_on:
+      - db
+
+volumes:
+  daara_db_data:
