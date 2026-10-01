@@ -1,0 +1,178 @@
+{
+  "info": {
+    "name": "Institut Al Hadi - API",
+    "description": "Collection des endpoints de l'API Institut Al Hadi. Variable `base_url` : http://localhost:8090/api (stack Docker). Comptes de démo (seeder) : mot de passe `password`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8090/api" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login - champs manquants (422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 422', () => pm.response.to.have.status(422));",
+            "pm.test('Erreurs telephone et password', () => {",
+            "  const errors = pm.response.json().errors;",
+            "  pm.expect(errors).to.have.property('telephone');",
+            "  pm.expect(errors).to.have.property('password');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Login - mauvais mot de passe (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"770000001\",\n  \"password\": \"mauvais\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 401', () => pm.response.to.have.status(401));",
+            "pm.test('Message explicite', () => pm.expect(pm.response.json().message).to.eql('Numéro de téléphone ou mot de passe incorrect.'));",
+            "pm.test('Pas de token', () => pm.expect(pm.response.json()).to.not.have.property('token'));"
+          ] } }]
+        },
+        {
+          "name": "Login - téléphone inconnu (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"779999999\",\n  \"password\": \"password\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 401', () => pm.response.to.have.status(401));"
+          ] } }]
+        },
+        {
+          "name": "Login - enseignant (téléphone avec espaces)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"77 000 00 02\",\n  \"password\": \"password\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));",
+            "pm.test('Rôle enseignant', () => pm.expect(pm.response.json().user.role).to.eql('enseignant'));"
+          ] } }]
+        },
+        {
+          "name": "Login - élève",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"770000003\",\n  \"password\": \"password\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));",
+            "pm.test('Rôle eleve', () => pm.expect(pm.response.json().user.role).to.eql('eleve'));"
+          ] } }]
+        },
+        {
+          "name": "Login - parent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"770000004\",\n  \"password\": \"password\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));",
+            "pm.test('Rôle parent', () => pm.expect(pm.response.json().user.role).to.eql('parent'));"
+          ] } }]
+        },
+        {
+          "name": "Login - admin (enregistre le token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telephone\": \"770000001\",\n  \"password\": \"password\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));",
+            "pm.test('Token Bearer présent', () => {",
+            "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+            "  pm.expect(body.token_type).to.eql('Bearer');",
+            "});",
+            "pm.test('Utilisateur admin sans mot de passe exposé', () => {",
+            "  pm.expect(body.user.role).to.eql('admin');",
+            "  pm.expect(body.user.telephone).to.eql('770000001');",
+            "  pm.expect(body.user).to.not.have.property('password');",
+            "});",
+            "pm.collectionVariables.set('token', body.token);"
+          ] } }]
+        },
+        {
+          "name": "Me - utilisateur connecté",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/me"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));",
+            "pm.test('Renvoie l\\'admin', () => pm.expect(pm.response.json().data.role).to.eql('admin'));"
+          ] } }]
+        },
+        {
+          "name": "Me - sans token (401)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{base_url}}/auth/me"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 401', () => pm.response.to.have.status(401));",
+            "pm.test('Message', () => pm.expect(pm.response.json().message).to.eql('Non authentifié.'));"
+          ] } }]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/logout"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Statut 200', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "Me - après logout (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/me"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Token révoqué → 401', () => pm.response.to.have.status(401));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}
