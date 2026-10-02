@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClasseAcademique extends Model
@@ -13,6 +14,9 @@ class ClasseAcademique extends Model
         'nom',
         'niveau',
         'effectif',
+        'annee_scolaire',
+        'oustaz_id',
+        'statut',
     ];
 
     protected function casts(): array
@@ -30,5 +34,10 @@ class ClasseAcademique extends Model
     public function plannings(): HasMany
     {
         return $this->hasMany(Planning::class);
+    }
+
+    public function oustaz(): BelongsTo
+    {
+        return $this->belongsTo(Oustaz::class, 'oustaz_id');
     }
 }

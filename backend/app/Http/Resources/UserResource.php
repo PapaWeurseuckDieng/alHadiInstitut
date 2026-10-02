@@ -28,6 +28,7 @@ class UserResource extends JsonResource
             'adresse' => $this->adresse,
             'role' => $this->role->value,
             'statut' => $this->statut->value,
+            'must_change_password' => $this->must_change_password,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

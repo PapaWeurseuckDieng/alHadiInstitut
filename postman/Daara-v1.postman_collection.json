@@ -1,0 +1,598 @@
+{
+  "info": {
+    "name": "Daara - Utilisateurs, élèves et Halaqat (API v1)",
+    "description": "Tests des comptes, de la première connexion, des inscriptions et des classes. Importer puis régler base_url. Sur Docker Compose, utiliser http://localhost:8090/api/v1 ; avec php artisan serve, utiliser http://127.0.0.1:8000/api/v1. Le parcours initial Admin suppose un compte de démonstration créé avec le seeder actuel (téléphone +221770000001, mot de passe temporaire passer). Pour une base existante, adapter admin_phone/admin_temp_password ou ignorer les requêtes de première connexion Admin et fournir admin_token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8090/api/v1" },
+    { "key": "admin_phone", "value": "+221770000001" },
+    { "key": "admin_temp_password", "value": "passer" },
+    { "key": "admin_password", "value": "Daara!Admin2026" },
+    { "key": "admin_token", "value": "" },
+    { "key": "temp_token", "value": "" },
+    { "key": "tuteur_phone", "value": "" },
+    { "key": "tuteur_profile_id", "value": "" },
+    { "key": "tuteur_temp_token", "value": "" },
+    { "key": "tuteur_password", "value": "Tuteur!Secure2026" },
+    { "key": "tuteur_token", "value": "" },
+    { "key": "oustaz_phone", "value": "" },
+    { "key": "oustaz_profile_id", "value": "" },
+    { "key": "oustaz_temp_token", "value": "" },
+    { "key": "oustaz_password", "value": "Oustaz!Secure2026" },
+    { "key": "oustaz_token", "value": "" },
+    { "key": "inscription_id", "value": "" },
+    { "key": "eleve_id", "value": "" },
+    { "key": "classe_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Authentification Admin",
+      "item": [
+        {
+          "name": "Login Admin - mot de passe temporaire",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Changement obligatoire', () => {",
+                  "  pm.expect(body.must_change_password).to.eql(true);",
+                  "  pm.expect(body.next_action).to.eql('change_password');",
+                  "  pm.expect(body.user.role).to.eql('admin');",
+                  "});",
+                  "pm.collectionVariables.set('temp_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{admin_phone}}\",\n  \"password\": \"{{admin_temp_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Vérifier le blocage métier avant changement (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{temp_token}}", "type": "string" }]
+            },
+            "url": "{{base_url}}/auth/me"
+          }
+        },
+        {
+          "name": "Changer le mot de passe temporaire Admin (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.unset('temp_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{temp_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"{{admin_password}}\",\n  \"new_password_confirmation\": \"{{admin_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/change-password"
+          }
+        },
+        {
+          "name": "Login Admin - mot de passe personnel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Connexion normale sans exposition du mot de passe', () => {",
+                  "  pm.expect(body.user.role).to.eql('admin');",
+                  "  pm.expect(body.must_change_password).to.not.eql(true);",
+                  "  pm.expect(body.user).to.not.have.property('password');",
+                  "});",
+                  "pm.collectionVariables.set('admin_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{admin_phone}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Admin : comptes, inscription et Halaqa",
+      "item": [
+        {
+          "name": "Créer un compte Tuteur (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = String(Math.floor(1000000 + Math.random() * 9000000));",
+                  "pm.collectionVariables.set('tuteur_phone', '+22177' + suffix);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Compte Tuteur sans mot de passe exposé', () => {",
+                  "  pm.expect(body.data.role).to.eql('tuteur');",
+                  "  pm.expect(body.data.must_change_password).to.eql(true);",
+                  "  pm.expect(body.data).to.not.have.property('password');",
+                  "  pm.expect(body.data.profil_id).to.be.a('number');",
+                  "});",
+                  "pm.collectionVariables.set('tuteur_profile_id', body.data.profil_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"DIOP\",\n  \"prenom\": \"Fatou\",\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"adresse\": \"Dakar\",\n  \"role\": \"tuteur\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/admin/users"
+          }
+        },
+        {
+          "name": "Créer un compte Oustaz (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = String(Math.floor(1000000 + Math.random() * 9000000));",
+                  "pm.collectionVariables.set('oustaz_phone', '+22178' + suffix);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Profil Oustaz créé et changement de mot de passe exigé', () => {",
+                  "  pm.expect(body.data.role).to.eql('oustaz');",
+                  "  pm.expect(body.data.must_change_password).to.eql(true);",
+                  "  pm.expect(body.data.profil_id).to.be.a('number');",
+                  "});",
+                  "pm.collectionVariables.set('oustaz_profile_id', body.data.profil_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"NDIAYE\",\n  \"prenom\": \"Moussa\",\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"role\": \"oustaz\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/admin/users"
+          }
+        },
+        {
+          "name": "Inscrire un Élève avec Tuteur existant (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Inscription officielle, matricule et aucun compte Élève', () => {",
+                  "  pm.expect(body.data.eleve.a_un_compte).to.eql(false);",
+                  "  pm.expect(body.data.eleve.matricule).to.match(/^ELV-\\d{4}-\\d{6}$/);",
+                  "  pm.expect(body.data.inscription.statut).to.eql('active');",
+                  "});",
+                  "pm.collectionVariables.set('eleve_id', body.data.eleve.id);",
+                  "pm.collectionVariables.set('inscription_id', body.data.inscription.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eleve\": {\n    \"nom\": \"SARR\",\n    \"prenom\": \"Awa\",\n    \"date_naissance\": \"2017-04-12\",\n    \"sexe\": \"F\",\n    \"adresse\": \"Dakar\"\n  },\n  \"inscription\": {\n    \"annee_scolaire\": \"2026-2027\",\n    \"date_inscription\": \"2026-10-01\"\n  },\n  \"tuteurs\": [\n    {\n      \"mode\": \"existant\",\n      \"tuteur_id\": {{tuteur_profile_id}},\n      \"lien_parente\": \"mere\",\n      \"est_responsable_legal\": true,\n      \"est_payeur\": true\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/eleves"
+          }
+        },
+        {
+          "name": "Créer Classe et affecter l'inscription (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('classe_nom', 'Halaqa Al-Falah ' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Oustaz et élève affectés', () => {",
+                  "  pm.expect(body.data.oustaz.id).to.eql(Number(pm.collectionVariables.get('oustaz_profile_id')));",
+                  "  pm.expect(body.data.effectif).to.eql(1);",
+                  "  pm.expect(body.data.eleves[0].inscription_id).to.eql(Number(pm.collectionVariables.get('inscription_id')));",
+                  "});",
+                  "pm.collectionVariables.set('classe_id', body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"{{classe_nom}}\",\n  \"niveau\": \"Intermédiaire\",\n  \"annee_scolaire\": \"2026-2027\",\n  \"oustaz_id\": {{oustaz_profile_id}},\n  \"inscription_ids\": [{{inscription_id}}]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/classes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Vérifications des rôles",
+      "item": [
+        {
+          "name": "Login Tuteur - premier accès",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et changement obligatoire', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.must_change_password).to.eql(true);",
+                  "  pm.expect(body.next_action).to.eql('change_password');",
+                  "});",
+                  "pm.collectionVariables.set('tuteur_temp_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"password\": \"passer\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Changer le mot de passe du Tuteur (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.unset('tuteur_temp_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{tuteur_temp_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"{{tuteur_password}}\",\n  \"new_password_confirmation\": \"{{tuteur_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/change-password"
+          }
+        },
+        {
+          "name": "Login Tuteur normal (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et rôle Tuteur', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.user.role).to.eql('tuteur');",
+                  "});",
+                  "pm.collectionVariables.set('tuteur_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"password\": \"{{tuteur_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Un Tuteur ne peut pas créer de compte (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{tuteur_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"TEST\",\n  \"prenom\": \"Refus\",\n  \"telephone\": \"+221700000000\",\n  \"role\": \"oustaz\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/admin/users"
+          }
+        },
+        {
+          "name": "Tuteur : consulter uniquement ses élèves (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et élève rattaché présent', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.data.some((eleve) => eleve.id === Number(pm.collectionVariables.get('eleve_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{tuteur_token}}", "type": "string" }]
+            },
+            "url": "{{base_url}}/tuteur/me/eleves"
+          }
+        },
+        {
+          "name": "Login Oustaz - premier accès",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et changement obligatoire', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.must_change_password).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set('oustaz_temp_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"password\": \"passer\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Changer le mot de passe de l’Oustaz (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.unset('oustaz_temp_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{oustaz_temp_token}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"{{oustaz_password}}\",\n  \"new_password_confirmation\": \"{{oustaz_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/change-password"
+          }
+        },
+        {
+          "name": "Login Oustaz normal (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et rôle Oustaz', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.user.role).to.eql('oustaz');",
+                  "});",
+                  "pm.collectionVariables.set('oustaz_token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"password\": \"{{oustaz_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Oustaz : consulter ses classes (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200 et Halaqa affectée présente', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.data.some((classe) => classe.id === Number(pm.collectionVariables.get('classe_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{oustaz_token}}", "type": "string" }]
+            },
+            "url": "{{base_url}}/oustaz/me/classes"
+          }
+        }
+      ]
+    }
+  ]
+}

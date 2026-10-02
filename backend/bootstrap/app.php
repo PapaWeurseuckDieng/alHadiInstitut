@@ -14,7 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
+            'password.change-token' => \App\Http\Middleware\EnsurePasswordChangeToken::class,
+            'role' => \App\Http\Middleware\EnsureRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Toujours répondre en JSON sur /api/*, même sans header Accept.
