@@ -33,6 +33,6 @@ class Paiement extends Model
 
     public function eleve(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'eleve_id');
+        return $this->belongsTo(Eleve::class, 'eleve_id');
     }
 }

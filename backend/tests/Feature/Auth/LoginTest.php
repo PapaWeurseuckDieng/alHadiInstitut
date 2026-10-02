@@ -13,7 +13,7 @@ class LoginTest extends TestCase
 
     public function test_chaque_role_peut_se_connecter_avec_telephone_et_mot_de_passe(): void
     {
-        foreach (Role::cases() as $i => $role) {
+        foreach ([Role::Admin, Role::Tuteur, Role::Oustaz] as $i => $role) {
             User::factory()->role($role)->create(['telephone' => "77000000{$i}"]);
 
             $this->postJson('/api/auth/login', [
@@ -34,7 +34,7 @@ class LoginTest extends TestCase
 
         $this->postJson('/api/auth/login', ['telephone' => '77-123.45 67', 'password' => 'password'])
             ->assertOk()
-            ->assertJsonPath('user.telephone', '771234567');
+            ->assertJsonPath('user.telephone', '+221771234567');
     }
 
     public function test_mauvais_mot_de_passe_renvoie_401(): void
@@ -65,6 +65,19 @@ class LoginTest extends TestCase
 
         $this->postJson('/api/auth/login', ['telephone' => '771234567', 'password' => 'password'])
             ->assertForbidden();
+
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_un_eleve_historique_ne_peut_pas_ouvrir_une_session(): void
+    {
+        User::factory()->role(Role::Eleve)->create(['telephone' => '771234567']);
+
+        $this->postJson('/api/auth/login', [
+            'telephone' => '771234567',
+            'password' => 'password',
+        ])->assertForbidden()
+            ->assertJsonPath('message', 'Les élèves ne disposent pas de compte de connexion.');
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
