@@ -1,0 +1,571 @@
+/* ==========================================================================
+   Page de connexion
+   - Ordinateur (>= 900px) : panneau d'accueil vert à gauche + carte à droite.
+   - Mobile (< 900px)      : bandeau vert en haut, carte qui le chevauche,
+                             pied de page en bas ; l'ensemble tient dans l'écran.
+   Couleurs : uniquement la charte (variables définies dans src/index.css).
+   ========================================================================== */
+
+/* Motif géométrique (étoiles à 8 branches) utilisé en fond du vert.
+   Trait blanc très léger : il donne du relief sans charger la page. */
+.login {
+  --login-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='88' viewBox='0 0 88 88'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.09' stroke-width='1'%3E%3Crect x='26' y='26' width='36' height='36'/%3E%3Crect x='26' y='26' width='36' height='36' transform='rotate(45 44 44)'/%3E%3Cpath d='M0 44H18.5M69.5 44H88M44 0V18.5M44 69.5V88'/%3E%3C/g%3E%3C/svg%3E");
+
+  /* Taille unique du logo, identique sur tous les écrans */
+  --login-logo-width: 7.5rem;
+
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  min-height: 100svh;
+}
+
+/* ---------- Panneau d'accueil (gauche) ---------- */
+
+.login__brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 4rem clamp(2.5rem, 5vw, 5rem);
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 100% 100%, rgba(202, 138, 4, 0.14), transparent 45%),
+    var(--login-motif),
+    var(--color-primary);
+}
+
+.login__brand-content {
+  position: relative;
+  max-width: 26rem;
+}
+
+.login__brand-title {
+  margin: 0;
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+/* Empêche la coupure de « Institut Al-Hadi » au niveau du tiret */
+.login__nowrap {
+  white-space: nowrap;
+}
+
+/* Filet doré : petite touche de la charte */
+.login__rule {
+  display: block;
+  width: 3.5rem;
+  height: 3px;
+  margin: 1.75rem 0;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.login__brand-text {
+  margin: 0 0 2rem;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* Liste des modules : pastilles discrètes sur deux colonnes */
+.login__modules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.login__module {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+/* Petit losange doré devant chaque module */
+.login__module::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--color-accent);
+  transform: rotate(45deg);
+}
+
+/* ---------- Zone de connexion (droite) ---------- */
+
+.login__main {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  padding: 2.5rem 1.5rem 1.5rem;
+  background: var(--color-bg);
+}
+
+/* Bandeau vert : masqué sur ordinateur, visible sur mobile */
+.login__band {
+  display: none;
+}
+
+/* Message du bandeau : affiché seulement sur les téléphones assez hauts */
+.login__band-title {
+  display: none;
+  margin: 0;
+  padding: 2.25rem 1.5rem 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: #ffffff;
+}
+
+.login__card {
+  align-self: center;
+  width: 100%;
+  max-width: 26rem;
+  padding: 2.5rem 2.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 40px -18px rgba(15, 81, 50, 0.25);
+}
+
+/* Logo affiché en entier, sans recadrage */
+.login__logo {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.login__logo-img {
+  display: block;
+  width: var(--login-logo-width);
+  max-width: 100%;
+  height: auto;
+}
+
+.login__title {
+  margin: 0 0 0.375rem;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.login__subtitle {
+  margin: 0 0 1.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+/* ---------- Messages ---------- */
+
+.login__alert {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.login__alert--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.login__alert--success {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* ---------- Formulaire ---------- */
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.login__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Conteneur champ + icône à gauche */
+.login__control {
+  position: relative;
+}
+
+.login__control-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.875rem;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.login__control:focus-within .login__control-icon {
+  color: var(--color-primary);
+}
+
+.login__input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 3rem;
+  padding: 0 0.875rem 0 2.625rem; /* place pour l'icône à gauche */
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1rem; /* 16px minimum : évite le zoom automatique sur iOS */
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+/* Champ mot de passe : garde aussi la place du bouton afficher/masquer à droite */
+.login__input.password-input__field {
+  padding-right: 3rem;
+}
+
+.login__input::placeholder {
+  color: #94a3b8;
+}
+
+.login__input:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.login__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px rgba(15, 81, 50, 0.15);
+}
+
+.login__input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.login__input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px rgba(153, 27, 27, 0.15);
+}
+
+.login__input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.login__field-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
+/* ---------- Bouton ---------- */
+
+.login__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  height: 3rem;
+  margin-top: 0.375rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 8px 18px -10px rgba(15, 81, 50, 0.7);
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.login__submit:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 10px 22px -10px rgba(15, 81, 50, 0.8);
+}
+
+.login__submit:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.login__submit:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+/* Indicateur de chargement dans le bouton */
+.login__spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: login-spin 0.8s linear infinite;
+}
+
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Pied de page ---------- */
+
+.login__footer {
+  padding-top: 1.5rem;
+  font-size: 0.8125rem;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+/* Chaque partie reste sur une ligne : sur petit écran, le texte passe proprement sur deux lignes */
+.login__footer-part {
+  white-space: nowrap;
+}
+
+.login__footer a {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.login__footer a:hover {
+  text-decoration: underline;
+}
+
+.login__footer a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login__spinner {
+    animation-duration: 2.4s;
+  }
+
+  .login__input,
+  .login__submit {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Mobile et tablette portrait : une seule colonne, sans défilement
+   ========================================================================== */
+
+@media (max-width: 899px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .login__brand {
+    display: none;
+  }
+
+  /* Page bloquée à la hauteur exacte de l'écran visible */
+  .login {
+    height: 100vh;   /* repli pour les anciens navigateurs */
+    height: 100dvh;  /* hauteur réelle, barre d'adresse comprise */
+    min-height: 0;
+  }
+
+  .login__main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  /* Le logo garde sa taille, sauf sur les écrans très peu hauts où il se réduit
+     juste assez pour que tout tienne sans défilement. */
+  .login__logo-img {
+    width: min(var(--login-logo-width), 15dvh);
+  }
+
+  /* Champs et bouton légèrement plus compacts si l'écran est court */
+  .login__input,
+  .login__submit {
+    height: clamp(2.625rem, 6.5dvh, 3rem);
+  }
+
+  /* Bandeau vert avec le même motif que le panneau d'accueil */
+  .login__band {
+    display: block;
+    flex: none;
+    height: clamp(6.5rem, 19svh, 11rem);
+    background:
+      radial-gradient(circle at 100% 0%, rgba(202, 138, 4, 0.14), transparent 55%),
+      var(--login-motif),
+      var(--color-primary);
+  }
+
+  /* La carte remonte sur le bandeau */
+  .login__card {
+    align-self: center;
+    width: calc(100% - 2rem);
+    margin-top: -3.75rem;
+    padding: 1.5rem 1.25rem 1.5rem;
+  }
+
+  .login__logo {
+    margin-bottom: 1rem;
+  }
+
+  .login__title {
+    font-size: 1.5rem;
+  }
+
+  .login__subtitle {
+    margin-bottom: 1.25rem;
+  }
+
+  .login__form {
+    gap: 1rem;
+  }
+
+  /* Le pied de page reste collé en bas de l'écran */
+  .login__footer {
+    margin-top: auto;
+    padding: 1rem 1rem 1.25rem;
+  }
+}
+
+/* Blocage du défilement sur mobile (classe ajoutée par LoginPage.jsx) */
+@media (max-width: 899px) {
+  html.login-sans-defilement,
+  html.login-sans-defilement body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none; /* supprime l'effet élastique */
+  }
+}
+
+/* Écrans très courts (navigateur avec barres, petits Android) */
+@media (max-width: 899px) and (max-height: 600px) {
+  .login__band {
+    height: 4rem;
+  }
+
+  .login__card {
+    margin-top: -2.75rem;
+    padding: 1rem 1.125rem;
+  }
+
+  .login__title {
+    font-size: 1.375rem;
+  }
+
+  .login__subtitle {
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .login__form {
+    gap: 0.625rem;
+  }
+
+  .login__footer {
+    padding: 0.5rem 1rem 0.625rem;
+  }
+}
+
+/* Grands téléphones (hauteur > 740px) : bandeau plus haut avec message d'accueil */
+@media (max-width: 899px) and (min-height: 741px) {
+  .login__band {
+    height: clamp(11rem, 27svh, 15rem);
+  }
+
+  .login__band-title {
+    display: block;
+  }
+}
+
+/* Petits écrans en hauteur (iPhone SE, petits Android) : on resserre l'espace,
+   le logo garde sa taille. */
+@media (max-width: 899px) and (max-height: 700px) {
+  .login__band {
+    height: 5.5rem;
+  }
+
+  .login__card {
+    margin-top: -3.25rem;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .login__logo {
+    margin-bottom: 0.25rem;
+  }
+
+  .login__subtitle {
+    margin-bottom: 1rem;
+  }
+
+  .login__form {
+    gap: 0.875rem;
+  }
+
+  .login__footer {
+    padding-top: 0.75rem;
+    padding-bottom: 0.875rem;
+  }
+}
+
+/* Ordinateur portable peu haut (ex. 1366x768) : carte un peu plus compacte */
+@media (min-width: 900px) and (max-height: 780px) {
+  .login__main {
+    padding-top: 1.5rem;
+  }
+
+  .login__card {
+    padding-top: 1.75rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .login__subtitle {
+    margin-bottom: 1.25rem;
+  }
+}
+
+/* Tablette portrait : la carte reste centrée avec une largeur confortable */
+@media (min-width: 600px) and (max-width: 899px) {
+  .login__card {
+    width: 100%;
+    max-width: 26rem;
+  }
+}
