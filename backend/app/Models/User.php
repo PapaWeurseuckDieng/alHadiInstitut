@@ -7,7 +7,7 @@ use App\Enums\StatutUtilisateur;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -31,6 +31,7 @@ class User extends Authenticatable
         'telephone',
         'adresse',
         'password',
+        'must_change_password',
         'role',
         'statut',
     ];
@@ -57,15 +58,29 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
             'statut' => StatutUtilisateur::class,
+            'must_change_password' => 'boolean',
         ];
     }
 
     /**
-     * Supprime espaces, points, tirets et parenthèses : "77 123-45.67" → "771234567".
+     * Normalise les numéros sénégalais vers E.164 : "77 123-45.67" → "+221771234567".
      */
     public static function normaliserTelephone(string $telephone): string
     {
-        return preg_replace('/[\s.\-()]/', '', $telephone);
+        $telephone = preg_replace('/[\s.\-()]/', '', trim($telephone));
+        if (str_starts_with($telephone, '00')) {
+            $telephone = '+'.substr($telephone, 2);
+        }
+
+        if (preg_match('/^\d{9}$/', $telephone)) {
+            return '+221'.$telephone;
+        }
+
+        if (preg_match('/^221\d{9}$/', $telephone)) {
+            return '+'.$telephone;
+        }
+
+        return $telephone;
     }
 
     protected function telephone(): Attribute
@@ -80,18 +95,13 @@ class User extends Authenticatable
         return $this->statut === StatutUtilisateur::Actif;
     }
 
-    public function inscriptions(): HasMany
+    public function tuteur(): HasOne
     {
-        return $this->hasMany(Inscription::class, 'eleve_id');
+        return $this->hasOne(Tuteur::class);
     }
 
-    public function fichesHebdomadaires(): HasMany
+    public function oustaz(): HasOne
     {
-        return $this->hasMany(FicheHebdomadaire::class, 'eleve_id');
-    }
-
-    public function paiements(): HasMany
-    {
-        return $this->hasMany(Paiement::class, 'eleve_id');
+        return $this->hasOne(Oustaz::class);
     }
 }

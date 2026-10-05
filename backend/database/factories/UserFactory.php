@@ -34,8 +34,9 @@ class UserFactory extends Factory
             'telephone' => '77'.fake()->unique()->numerify('#######'),
             'adresse' => fake()->city(),
             'password' => static::$password ??= Hash::make('password'),
-            'role' => Role::Eleve,
+            'role' => Role::Admin,
             'statut' => StatutUtilisateur::Actif,
+            'must_change_password' => false,
             'remember_token' => Str::random(10),
         ];
     }
