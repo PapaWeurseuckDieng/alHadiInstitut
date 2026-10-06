@@ -2,7 +2,7 @@
  * Service d'authentification (Laravel Sanctum, mode token).
  *
  * Contrat backend utilisé (backend/routes/api.php + Api/AuthController) :
- *   POST /api/auth/login   { telephone, password }
+ *   POST /api/v1/auth/login   { telephone, password }
  *     200 -> { message, token, token_type: "Bearer", user }
  *     401 -> { message }  identifiants incorrects
  *     403 -> { message }  compte désactivé
@@ -14,6 +14,8 @@ import { apiRequest } from './apiClient'
 // Clés de stockage local de la session.
 const CLE_TOKEN = 'alhadi.auth.token'
 const CLE_UTILISATEUR = 'alhadi.auth.user'
+let sessionToken = null
+let sessionUser = null
 
 /**
  * Connecte un utilisateur et enregistre sa session.
@@ -22,7 +24,7 @@ const CLE_UTILISATEUR = 'alhadi.auth.user'
  * @throws {import('./apiClient').ApiError}
  */
 export async function login({ telephone, password }) {
-  const reponse = await apiRequest('/auth/login', {
+  const reponse = await apiRequest('/v1/auth/login', {
     method: 'POST',
     // Le backend normalise lui-même le numéro (espaces, points, tirets...).
     body: { telephone: telephone.trim(), password },
@@ -38,6 +40,8 @@ export async function login({ telephone, password }) {
  * @param {object} user
  */
 function enregistrerSession(token, user) {
+  sessionToken = token
+  sessionUser = user
   try {
     localStorage.setItem(CLE_TOKEN, token)
     localStorage.setItem(CLE_UTILISATEUR, JSON.stringify(user))
@@ -50,18 +54,49 @@ function enregistrerSession(token, user) {
 /** @returns {string | null} Token Sanctum courant, s'il existe. */
 export function getToken() {
   try {
-    return localStorage.getItem(CLE_TOKEN)
+    return sessionToken ?? localStorage.getItem(CLE_TOKEN)
   } catch {
-    return null
+    return sessionToken
   }
 }
 
 /** @returns {object | null} Utilisateur connecté, s'il existe. */
 export function getUtilisateur() {
+  if (sessionUser) return sessionUser
   try {
     const brut = localStorage.getItem(CLE_UTILISATEUR)
     return brut ? JSON.parse(brut) : null
   } catch {
     return null
   }
+}
+
+export function clearSession() {
+  sessionToken = null
+  sessionUser = null
+  try {
+    localStorage.removeItem(CLE_TOKEN)
+    localStorage.removeItem(CLE_UTILISATEUR)
+  } catch { /* Session in memory is already cleared. */ }
+}
+
+export async function getCurrentUser() {
+  const token = getToken()
+  const response = await apiRequest('/v1/auth/me', { token })
+  if (getToken() === token) enregistrerSession(token, response.data)
+  return response.data
+}
+
+export async function logout() {
+  try {
+    await apiRequest('/v1/auth/logout', { method: 'POST', token: getToken() })
+  } catch (error) {
+    if (error.status !== 401) throw error
+  }
+  clearSession()
+}
+
+export async function changePassword(body) {
+  await apiRequest('/v1/auth/change-password', { method: 'POST', body, token: getToken() })
+  clearSession()
 }

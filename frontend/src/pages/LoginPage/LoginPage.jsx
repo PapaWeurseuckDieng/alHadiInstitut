@@ -1,21 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
 import { login } from '../../services/authService'
 import { validateLogin } from './validateLogin'
 import './LoginPage.css'
 
-/**
- * Route vers laquelle rediriger après une connexion réussie.
- * Laissée à null tant que le tableau de bord n'existe pas : un message
- * de confirmation s'affiche à la place. À renseigner plus tard (ex. '/tableau-de-bord').
- */
-const ROUTE_APRES_CONNEXION = null
-
 const VALEURS_INITIALES = { telephone: '', password: '' }
 
 // Domaines couverts par la plateforme, affichés dans le panneau d'accueil.
-const MODULES = ['Suivi coranique', 'Scolarité', 'Internat', 'Finances']
+const MODULES = ['Élèves & inscriptions', 'Classes académiques', 'Comptes & accès']
 
 /**
  * Page de connexion : numéro de téléphone + mot de passe.
@@ -25,6 +18,7 @@ const MODULES = ['Suivi coranique', 'Scolarité', 'Internat', 'Finances']
  */
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [valeurs, setValeurs] = useState(VALEURS_INITIALES)
   // Erreurs affichées sous chaque champ (validation locale ou 422 Laravel)
@@ -32,8 +26,6 @@ export default function LoginPage() {
   // Erreur générale affichée en haut du formulaire (401, 403, 429, réseau...)
   const [erreurGenerale, setErreurGenerale] = useState('')
   const [chargement, setChargement] = useState(false)
-  // Utilisateur connecté, utilisé pour le message de confirmation
-  const [utilisateur, setUtilisateur] = useState(null)
 
   // Verrou synchrone : bloque un double envoi avant même que l'état ne se mette à jour.
   const envoiEnCours = useRef(false)
@@ -84,14 +76,8 @@ export default function LoginPage() {
     envoiEnCours.current = true
     setChargement(true)
     try {
-      const { user } = await login(valeurs)
-
-      if (ROUTE_APRES_CONNEXION) {
-        navigate(ROUTE_APRES_CONNEXION, { replace: true })
-      } else {
-        setUtilisateur(user)
-        setValeurs(VALEURS_INITIALES)
-      }
+      await login(valeurs)
+      navigate('/tableau-de-bord', { replace: true })
     } catch (erreur) {
       if (erreur.status === 422) {
         // Erreurs de validation Laravel : on garde le premier message de chaque champ.
@@ -123,7 +109,7 @@ export default function LoginPage() {
           </p>
           <span className="login__rule" aria-hidden="true" />
           <p className="login__brand-text">
-            Un seul espace pour l'administration, les enseignants, les élèves et les parents.
+            Un seul espace pour l’administration, les enseignants et les tuteurs.
           </p>
           <ul className="login__modules">
             {MODULES.map((module) => (
@@ -160,9 +146,9 @@ export default function LoginPage() {
             </div>
           )}
 
-          {utilisateur && (
+          {location.state?.message && (
             <div className="login__alert login__alert--success" role="status">
-              Connexion réussie. Bienvenue, {utilisateur.prenom} {utilisateur.nom}.
+              {location.state.message}
             </div>
           )}
 
