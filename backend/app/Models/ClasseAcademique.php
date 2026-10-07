@@ -23,6 +23,8 @@ class ClasseAcademique extends Model
     {
         return [
             'effectif' => 'integer',
+            'is_archived' => 'boolean',
+            'archived_at' => 'datetime',
         ];
     }
 

@@ -140,6 +140,6 @@ export default function DashboardPage() {
         <footer className="db-footer"><span>© {new Date().getFullYear()} Institut Al-Hadi</span><span>Éducation & transmission</span></footer>
       </main>
     </div>
-    {form && <RecordForm kind={form} options={data.options} year={year} onClose={() => setForm(null)} onSaved={saved} onSessionExpired={sessionExpired} />}
+    {form && <RecordForm kind={form} options={data.options} year={data.annee_scolaire_courante} onClose={() => setForm(null)} onSaved={saved} onSessionExpired={sessionExpired} />}
   </div>
 }

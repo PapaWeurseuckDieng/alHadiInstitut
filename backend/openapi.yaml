@@ -1,0 +1,1291 @@
+openapi: 3.1.0
+info:
+  title: API de gestion du Daara
+  version: 1.0.0
+  description: >-
+    Contrat cible de l'API REST Laravel. Les erreurs sont en français. L'année
+    scolaire de création est toujours calculée par le serveur; elle n'est jamais
+    fournie par le client. Les ressources élèves et utilisateurs sont archivées,
+    jamais supprimées physiquement.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Développement local
+tags:
+  - name: Auth
+  - name: Administration - utilisateurs
+  - name: Élèves et inscriptions
+  - name: Classes
+  - name: Espace tuteur
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Ouvrir une session par numéro de téléphone
+      description: >-
+        Avec le mot de passe initial, renvoie un jeton limité au changement
+        obligatoire du mot de passe. Les autres ressources restent interdites
+        tant que must_change_password est vrai.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              telephone: "+221771234567"
+              password: "passer"
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Connexion réussie ou changement de mot de passe exigé
+          content:
+            application/json:
+              examples:
+                changementObligatoire:
+                  summary: Première connexion
+                  value:
+                    message: Changement de mot de passe obligatoire.
+                    token: "1|jeton-temporaire"
+                    token_type: Bearer
+                    must_change_password: true
+                    next_action: change_password
+                connexionReussie:
+                  summary: Connexion normale
+                  value:
+                    message: Connexion réussie.
+                    token: "2|jeton-api"
+                    token_type: Bearer
+                    must_change_password: false
+                    user:
+                      id: 24
+                      nom: Ndiaye
+                      prenom: Aminata
+                      telephone: "+221771234567"
+                      sexe: F
+                      role: tuteur
+                      must_change_password: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      operationId: changeInitialPassword
+      summary: Changer le mot de passe initial
+      description: >-
+        Autorisé uniquement avec le jeton temporaire reçu au login. Le mot de
+        passe doit compter au moins six caractères. Aucune règle de majuscule,
+        chiffre ou caractère spécial n'est imposée. Les anciens jetons sont
+        révoqués après succès.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+            example:
+              new_password: monSecret6
+              new_password_confirmation: monSecret6
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Mot de passe modifié
+          content:
+            application/json:
+              example:
+                message: Mot de passe modifié. Vous pouvez vous connecter.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Révoquer le jeton courant
+      responses:
+        '200':
+          description: Session terminée
+          content:
+            application/json:
+              example:
+                message: Déconnexion réussie.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /admin/users:
+    get:
+      tags: [Administration - utilisateurs]
+      operationId: listUsers
+      summary: Lister les comptes utilisateurs
+      description: Admin uniquement; les archives sont exclues par défaut.
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+        - $ref: '#/components/parameters/Page'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, tuteur, oustaz]
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+      responses:
+        '200':
+          description: Page de comptes
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 24
+                    nom: Ndiaye
+                    prenom: Aminata
+                    telephone: "+221771234567"
+                    sexe: F
+                    role: tuteur
+                    must_change_password: true
+                    is_archived: false
+                pagination:
+                  page: 1
+                  per_page: 20
+                  total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Administration - utilisateurs]
+      operationId: createUser
+      summary: Créer un compte Admin, Tuteur ou Oustaz
+      description: >-
+        Admin uniquement. L'élève n'est jamais un compte utilisateur. Le serveur
+        génère le matricule, hash le mot de passe initial "passer" et définit
+        must_change_password à true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              tuteur:
+                value:
+                  nom: Ndiaye
+                  prenom: Aminata
+                  telephone: "+221771234567"
+                  sexe: F
+                  role: tuteur
+                  profession: Commerçante
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '201':
+          description: Compte créé
+          content:
+            application/json:
+              example:
+                message: Compte créé.
+                data:
+                  id: 24
+                  nom: Ndiaye
+                  prenom: Aminata
+                  telephone: "+221771234567"
+                  sexe: F
+                  role: tuteur
+                  must_change_password: true
+                  is_archived: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /admin/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Administration - utilisateurs]
+      operationId: getUser
+      summary: Consulter un compte
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Compte trouvé
+          content:
+            application/json:
+              example:
+                data:
+                  id: 24
+                  nom: Ndiaye
+                  prenom: Aminata
+                  telephone: "+221771234567"
+                  sexe: F
+                  role: tuteur
+                  must_change_password: false
+                  is_archived: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags: [Administration - utilisateurs]
+      operationId: updateUser
+      summary: Modifier un compte
+      description: Admin uniquement; le rôle élève est interdit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              telephone: "+221771234568"
+              sexe: F
+              profession: Commerçante
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Compte modifié
+          content:
+            application/json:
+              example:
+                message: Compte modifié.
+                data:
+                  id: 24
+                  telephone: "+221771234568"
+                  sexe: F
+                  role: tuteur
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /admin/users/{userId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Administration - utilisateurs]
+      operationId: archiveUser
+      summary: Archiver un compte sans le supprimer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+            example:
+              motif: Départ de l'établissement
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Compte archivé
+          content:
+            application/json:
+              example:
+                message: Compte archivé.
+                data:
+                  id: 24
+                  is_archived: true
+                  archived_at: "2026-10-07T20:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /eleves:
+    get:
+      tags: [Élèves et inscriptions]
+      operationId: listStudents
+      summary: Lister les élèves
+      description: Admin uniquement; les élèves archivés sont exclus par défaut.
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+        - $ref: '#/components/parameters/Page'
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+        - name: annee_scolaire
+          in: query
+          description: Par défaut, année scolaire courante; filtre historique facultatif pour Admin.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{4}$'
+      responses:
+        '200':
+          description: Page d'élèves
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 81
+                    matricule: ELV-2026-000001
+                    nom: Diop
+                    prenom: Moussa
+                    sexe: M
+                    tuteur_id: 24
+                    is_archived: false
+                pagination:
+                  page: 1
+                  per_page: 20
+                  total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: enrollStudent
+      summary: Créer la fiche élève et son inscription officielle
+      description: >-
+        Admin uniquement. Matricule et année scolaire générés côté serveur.
+        classe_id et tuteur_id sont obligatoires. La fiche et l'inscription
+        sont créées atomiquement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollStudentRequest'
+            example:
+              eleve:
+                nom: Diop
+                prenom: Moussa
+                date_naissance: "2015-03-12"
+                sexe: M
+                adresse: Thiès
+              classe_id: 7
+              tuteurs:
+                - mode: existant
+                  tuteur_id: 24
+                  lien_parente: mère
+                  est_responsable_legal: true
+                  est_payeur: true
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '201':
+          description: Élève inscrit
+          content:
+            application/json:
+              example:
+                message: Élève inscrit pour l'année scolaire 2026-2027.
+                data:
+                  eleve:
+                    id: 81
+                    matricule: ELV-2026-000001
+                    nom: Diop
+                    prenom: Moussa
+                    sexe: M
+                    statut: actif
+                    a_un_compte: false
+                  inscription:
+                    id: 102
+                    annee_scolaire: 2026-2027
+                    date_inscription: "2026-10-07"
+                    classe_id: 7
+                    statut: active
+                  tuteurs:
+                    - id: 24
+                      user_id: 35
+                      nom: Ndiaye
+                      prenom: Aminata
+                      telephone: "+221771234567"
+                      compte_cree: false
+                      must_change_password: false
+                      lien_parente: mère
+                      est_responsable_legal: true
+                      est_payeur: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /eleves/{eleveId}:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Élèves et inscriptions]
+      operationId: getStudent
+      summary: Consulter une fiche élève
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Fiche et inscriptions de l'élève
+          content:
+            application/json:
+              example:
+                data:
+                  id: 81
+                  matricule: ELV-2026-000001
+                  nom: Diop
+                  prenom: Moussa
+                  sexe: M
+                  tuteur_id: 24
+                  is_archived: false
+                  inscriptions:
+                    - id: 102
+                      annee_scolaire: 2026-2027
+                      classe_id: 7
+                      statut: active
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags: [Élèves et inscriptions]
+      operationId: updateStudent
+      summary: Modifier une fiche élève
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStudentRequest'
+            example:
+              adresse: Dakar
+              sexe: M
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Fiche modifiée
+          content:
+            application/json:
+              example:
+                message: Fiche élève modifiée.
+                data:
+                  id: 81
+                  adresse: Dakar
+                  sexe: M
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /eleves/{eleveId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: archiveStudent
+      summary: Archiver un élève sans supprimer ses inscriptions
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+            example:
+              motif: Départ du Daara
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Élève archivé
+          content:
+            application/json:
+              example:
+                message: Élève archivé.
+                data:
+                  id: 81
+                  is_archived: true
+                  archived_at: "2026-10-07T20:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /inscriptions-annuelles:
+    get:
+      tags: [Élèves et inscriptions]
+      operationId: listEnrollments
+      summary: Lister les inscriptions annuelles
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: annee_scolaire
+          in: query
+          description: Année courante par défaut; année historique facultative pour Admin.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{4}$'
+        - name: classe_id
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Inscriptions de l'année sélectionnée
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 102
+                    eleve_id: 81
+                    classe_id: 7
+                    annee_scolaire: 2026-2027
+                    statut: active
+                pagination:
+                  page: 1
+                  per_page: 20
+                  total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: reenrollStudent
+      summary: Réinscrire un élève existant pour l'année courante
+      description: L'année scolaire est calculée côté serveur et n'est pas un champ accepté.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReenrollStudentRequest'
+            example:
+              eleve_id: 81
+              classe_id: 8
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '201':
+          description: Réinscription créée
+          content:
+            application/json:
+              example:
+                message: Réinscription créée pour l'année scolaire 2026-2027.
+                data:
+                  id: 103
+                  eleve_id: 81
+                  classe_id: 8
+                  annee_scolaire: 2026-2027
+                  statut: active
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /classes:
+    get:
+      tags: [Classes]
+      operationId: listClasses
+      summary: Lister les classes
+      description: L'année courante et les classes non archivées sont sélectionnées par défaut.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/IncludeArchived'
+        - name: annee_scolaire
+          in: query
+          description: Filtre historique facultatif, Admin uniquement.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{4}$'
+      responses:
+        '200':
+          description: Liste paginée des classes
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 7
+                    nom: Classe A
+                    niveau: Débutant
+                    annee_scolaire: 2026-2027
+                    oustaz_id: 5
+                    effectif: 12
+                pagination:
+                  page: 1
+                  per_page: 20
+                  total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Classes]
+      operationId: createClass
+      summary: Créer une classe et lui affecter un Oustaz
+      description: Admin uniquement; l'année scolaire est calculée côté serveur.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClassRequest'
+            example:
+              nom: Classe A
+              niveau: Débutant
+              oustaz_id: 5
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '201':
+          description: Classe créée
+          content:
+            application/json:
+              example:
+                message: Classe créée.
+                data:
+                  id: 7
+                  nom: Classe A
+                  niveau: Débutant
+                  annee_scolaire: 2026-2027
+                  oustaz_id: 5
+                  effectif: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /classes/{classeId}:
+    parameters:
+      - $ref: '#/components/parameters/ClassId'
+    patch:
+      tags: [Classes]
+      operationId: updateClass
+      summary: Modifier une classe ou réaffecter son Oustaz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClassRequest'
+            example:
+              oustaz_id: 6
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Classe modifiée
+          content:
+            application/json:
+              example:
+                message: Classe modifiée.
+                data:
+                  id: 7
+                  nom: Classe A
+                  niveau: Débutant
+                  annee_scolaire: 2026-2027
+                  oustaz_id: 6
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /classes/{classeId}/eleves:
+    parameters:
+      - $ref: '#/components/parameters/ClassId'
+    get:
+      tags: [Classes]
+      operationId: listClassStudents
+      summary: Lister les élèves inscrits dans une classe
+      description: >-
+        Accessible à l'Admin et à l'Oustaz affecté à cette classe. Seul l'Admin
+        peut inclure les élèves ou classes archivés.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        '200':
+          description: Élèves actifs de la classe
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 81
+                    matricule: ELV-2026-000001
+                    nom: Diop
+                    prenom: Moussa
+                    sexe: M
+                pagination:
+                  page: 1
+                  per_page: 20
+                  total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /tuteur/enfants/{eleveId}/synthese:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Espace tuteur]
+      operationId: getChildProgressSummary
+      summary: Consulter la synthèse de progression d'un enfant rattaché
+      description: >-
+        Le serveur vérifie que l'élève est rattaché au tuteur authentifié.
+        Un identifiant d'élève non rattaché renvoie 403 sans divulguer ses données.
+      responses:
+        '200':
+          description: Synthèse d'évolution scolaire
+          content:
+            application/json:
+              example:
+                data:
+                  eleve:
+                    id: 81
+                    matricule: ELV-2026-000001
+                    nom_complet: Moussa Diop
+                  annee_scolaire: 2026-2027
+                  classe:
+                    id: 7
+                    nom: Classe A
+                  progression:
+                    moyenne_periode: 15.5
+                    moyenne_periode_precedente: 14.0
+                    tendance: en_hausse
+                    dernieres_evaluations:
+                      - matiere: Lecture
+                        note: 16.0
+                        sur: 20
+                        date: "2026-10-05"
+                  mise_a_jour: "2026-10-07T20:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum token
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    StudentId:
+      name: eleveId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    ClassId:
+      name: classeId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    IncludeArchived:
+      name: include_archived
+      in: query
+      description: Admin uniquement. Sans true, les ressources archivées sont exclues.
+      schema:
+        type: boolean
+        default: false
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [telephone, password]
+      properties:
+        telephone:
+          type: string
+          pattern: '^\+[1-9][0-9]{7,14}$'
+          example: "+221771234567"
+        password:
+          type: string
+          minLength: 6
+          example: passer
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [new_password, new_password_confirmation]
+      properties:
+        new_password:
+          type: string
+          minLength: 6
+          not:
+            const: passer
+          example: monSecret6
+        new_password_confirmation:
+          type: string
+          minLength: 6
+          example: monSecret6
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [nom, prenom, telephone, sexe, role]
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        prenom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        telephone:
+          type: string
+          pattern: '^\+[1-9][0-9]{7,14}$'
+        sexe:
+          type: string
+          enum: [M, F]
+        role:
+          type: string
+          enum: [admin, tuteur, oustaz]
+        adresse:
+          type: [string, 'null']
+          maxLength: 255
+        date_naissance:
+          type: [string, 'null']
+          format: date
+        profession:
+          type: [string, 'null']
+          maxLength: 120
+          description: Requis pour un rôle tuteur; interdit pour les autres rôles.
+        specialite:
+          type: [string, 'null']
+          maxLength: 120
+          description: Requis pour un rôle oustaz; interdit pour les autres rôles.
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        prenom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        telephone:
+          type: string
+          pattern: '^\+[1-9][0-9]{7,14}$'
+        sexe:
+          type: string
+          enum: [M, F]
+        role:
+          type: string
+          enum: [admin, tuteur, oustaz]
+        adresse:
+          type: [string, 'null']
+          maxLength: 255
+        date_naissance:
+          type: [string, 'null']
+          format: date
+        profession:
+          type: [string, 'null']
+          maxLength: 120
+        specialite:
+          type: [string, 'null']
+          maxLength: 120
+        is_active:
+          type: boolean
+    EnrollStudentRequest:
+      type: object
+      additionalProperties: false
+      required: [eleve, classe_id, tuteurs]
+      properties:
+        eleve:
+          type: object
+          additionalProperties: false
+          required: [nom, prenom, sexe]
+          properties:
+            nom:
+              type: string
+              minLength: 1
+              maxLength: 120
+            prenom:
+              type: string
+              minLength: 1
+              maxLength: 120
+            date_naissance:
+              type: [string, 'null']
+              format: date
+            sexe:
+              type: string
+              enum: [M, F]
+            adresse:
+              type: [string, 'null']
+              maxLength: 255
+        classe_id:
+          type: integer
+          minimum: 1
+        inscription:
+          type: object
+          additionalProperties: false
+          properties:
+            date_inscription:
+              type: string
+              format: date
+        tuteurs:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [mode]
+            properties:
+              mode:
+                type: string
+                enum: [existant, creer]
+              tuteur_id:
+                type: integer
+                minimum: 1
+                description: Requis avec le mode existant.
+              compte:
+                type: object
+                description: Requis avec le mode creer.
+                required: [nom, prenom, sexe, telephone]
+                properties:
+                  nom:
+                    type: string
+                    maxLength: 120
+                  prenom:
+                    type: string
+                    maxLength: 120
+                  sexe:
+                    type: string
+                    enum: [M, F]
+                  telephone:
+                    type: [string, 'null']
+                    pattern: '^\+[1-9][0-9]{7,14}$'
+                  adresse:
+                    type: [string, 'null']
+                    maxLength: 255
+              lien_parente:
+                type: [string, 'null']
+                maxLength: 40
+              est_responsable_legal:
+                type: boolean
+              est_payeur:
+                type: boolean
+    UpdateStudentRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        prenom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        date_naissance:
+          type: [string, 'null']
+          format: date
+        sexe:
+          type: string
+          enum: [M, F]
+        adresse:
+          type: [string, 'null']
+          maxLength: 255
+    ReenrollStudentRequest:
+      type: object
+      additionalProperties: false
+      required: [eleve_id, classe_id]
+      properties:
+        eleve_id:
+          type: integer
+          minimum: 1
+        classe_id:
+          type: integer
+          minimum: 1
+    CreateClassRequest:
+      type: object
+      additionalProperties: false
+      required: [nom, niveau, oustaz_id]
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        niveau:
+          type: string
+          minLength: 1
+          maxLength: 80
+        oustaz_id:
+          type: integer
+          minimum: 1
+    UpdateClassRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 120
+        niveau:
+          type: string
+          minLength: 1
+          maxLength: 80
+        oustaz_id:
+          type: integer
+          minimum: 1
+    ArchiveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        motif:
+          type: [string, 'null']
+          maxLength: 255
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Le numéro de téléphone existe déjà.
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          example: Les données fournies sont invalides.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            sexe: [Le sexe doit être M ou F.]
+    ProgressSummary:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [eleve, annee_scolaire, progression]
+          properties:
+            eleve:
+              type: object
+              properties:
+                id:
+                  type: integer
+                matricule:
+                  type: string
+                nom_complet:
+                  type: string
+            annee_scolaire:
+              type: string
+              pattern: '^\d{4}-\d{4}$'
+            classe:
+              type: [object, 'null']
+              properties:
+                id:
+                  type: integer
+                nom:
+                  type: string
+            progression:
+              type: object
+              properties:
+                moyenne_periode:
+                  type: [number, 'null']
+                moyenne_periode_precedente:
+                  type: [number, 'null']
+                tendance:
+                  type: string
+                  enum: [en_hausse, stable, en_baisse, non_evalue]
+                dernieres_evaluations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      matiere:
+                        type: string
+                      note:
+                        type: number
+                      sur:
+                        type: number
+                      date:
+                        type: string
+                        format: date
+            mise_a_jour:
+              type: string
+              format: date-time
+  responses:
+    BadRequest:
+      description: Requête mal formée ou corps JSON illisible
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Le corps de la requête est mal formé.
+    Unauthorized:
+      description: Authentification absente ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Authentification requise.
+    Forbidden:
+      description: Rôle insuffisant ou accès refusé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Vous n'êtes pas autorisé à effectuer cette action.
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: La ressource demandée est introuvable.
+    Conflict:
+      description: Conflit avec une ressource ou une règle métier
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Une inscription existe déjà pour cette année scolaire.
+    ValidationError:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+          example:
+            message: Les données fournies sont invalides.
+            errors:
+              telephone:
+                - Le numéro de téléphone existe déjà.
+    ServerError:
+      description: Erreur interne inattendue
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Une erreur interne est survenue. Veuillez réessayer plus tard.
