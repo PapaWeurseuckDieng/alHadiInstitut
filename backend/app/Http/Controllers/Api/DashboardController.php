@@ -71,9 +71,9 @@ class DashboardController extends Controller
             }
             if ($section === 'classes') {
                 return [
-                        'id' => $record->id, 'nom' => $record->nom, 'niveau' => $record->niveau,
+                    'id' => $record->id, 'nom' => $record->nom, 'niveau' => $record->niveau,
                     'annee_scolaire' => $record->annee_scolaire, 'statut' => $record->statut,
-                        'is_archived' => $record->is_archived,
+                    'is_archived' => $record->is_archived,
                     'effectif' => $record->inscriptions_count,
                     'oustaz' => trim(($record->oustaz?->user?->prenom ?? '').' '.($record->oustaz?->user?->nom ?? '')),
                 ];
@@ -123,9 +123,9 @@ class DashboardController extends Controller
                     ->get(['id', 'nom', 'niveau', 'annee_scolaire']),
                 'inscriptions' => Inscription::with('eleve')->where('statut', 'active')->where('is_archived', false)
                     ->whereNull('classe_academique_id')->whereHas('eleve', fn ($q) => $q->where('is_archived', false))->get()->map(fn ($i) => [
-                    'id' => $i->id, 'annee_scolaire' => $i->annee_scolaire,
-                    'label' => $i->eleve->prenom.' '.$i->eleve->nom, 'matricule' => $i->eleve->matricule,
-                ]),
+                        'id' => $i->id, 'annee_scolaire' => $i->annee_scolaire,
+                        'label' => $i->eleve->prenom.' '.$i->eleve->nom, 'matricule' => $i->eleve->matricule,
+                    ]),
             ],
             'activites' => AuditEvent::whereIn('action', ['user.created', 'eleve.enrolled', 'classe.created'])->orderByDesc('id')->limit(6)->get(['id', 'action', 'entity_id', 'created_at']),
         ]]);
