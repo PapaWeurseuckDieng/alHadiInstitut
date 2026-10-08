@@ -15,6 +15,9 @@ tags:
   - name: Administration - utilisateurs
   - name: Élèves et inscriptions
   - name: Classes
+  - name: Suivi coranique
+  - name: Planning et présences
+  - name: Exemplarité
   - name: Espace tuteur
 security:
   - bearerAuth: []
@@ -816,6 +819,357 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /referentiels/sourates:
+    get:
+      tags: [Suivi coranique]
+      operationId: listSourates
+      summary: Lister les 114 sourates et leur nombre de versets
+      description: Accessible aux Admins, Oustaz et Tuteurs authentifiés.
+      responses:
+        '200':
+          description: Référentiel coranique
+          content:
+            application/json:
+              example:
+                data:
+                  - numero: 1
+                    nom: Al-Fatiha
+                    nom_arabe: الفاتحة
+                    nombre_versets: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /fiches-hebdomadaires:
+    get:
+      tags: [Suivi coranique]
+      operationId: listWeeklySheets
+      summary: Lister les fiches hebdomadaires accessibles
+      parameters:
+        - name: eleve_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: statut
+          in: query
+          schema: { type: string, enum: [brouillon, soumise, validee] }
+        - name: date_debut
+          in: query
+          schema: { type: string, format: date }
+        - name: date_fin
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Fiches triées par semaine décroissante
+          content:
+            application/json:
+              example:
+                data: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      tags: [Suivi coranique]
+      operationId: createWeeklySheet
+      summary: Créer une fiche hebdomadaire en brouillon
+      description: La période doit commencer un samedi et se terminer le vendredi suivant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWeeklySheetRequest'
+            example:
+              eleve_id: 81
+              date_debut: "2026-10-03"
+              date_fin: "2026-10-09"
+              sourate_debut_id: 1
+              verset_debut: 1
+              sourate_fin_id: 1
+              verset_fin: 7
+      responses:
+        '201':
+          description: Fiche créée
+          content:
+            application/json:
+              example:
+                message: Fiche hebdomadaire créée en brouillon.
+                data:
+                  id: 12
+                  statut: brouillon
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}:
+    parameters:
+      - name: ficheId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Suivi coranique]
+      operationId: getWeeklySheet
+      summary: Consulter une fiche hebdomadaire
+      responses:
+        '200':
+          description: Fiche et évaluations quotidiennes
+          content:
+            application/json:
+              example:
+                data:
+                  id: 12
+                  statut: brouillon
+                  notes: []
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Suivi coranique]
+      operationId: updateWeeklySheet
+      summary: Modifier la cible d'une fiche en brouillon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWeeklySheetRequest'
+      responses:
+        '200':
+          description: Fiche mise à jour
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}/jours/{jour}:
+    parameters:
+      - name: ficheId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+      - name: jour
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+    put:
+      tags: [Suivi coranique]
+      operationId: saveDailyQuranMarkers
+      summary: Saisir les repères D/J/M et la qualité de récitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyQuranRecordRequest'
+            example:
+              reperes:
+                D:
+                  sourate_debut_id: 1
+                  verset_debut: 1
+                  sourate_fin_id: 1
+                  verset_fin: 7
+                J: null
+                M: null
+              qualite_recitation: 4
+      responses:
+        '200':
+          description: Repères enregistrés
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}/soumettre:
+    post:
+      tags: [Suivi coranique]
+      operationId: submitWeeklySheet
+      summary: Soumettre une fiche en brouillon
+      parameters:
+        - name: ficheId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Fiche soumise
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}/valider:
+    post:
+      tags: [Suivi coranique]
+      operationId: validateWeeklySheet
+      summary: Valider une fiche soumise (Admin)
+      parameters:
+        - name: ficheId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Fiche validée
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /classes/{classeId}/planning:
+    parameters:
+      - $ref: '#/components/parameters/ClassId'
+    get:
+      tags: [Planning et présences]
+      operationId: getWeeklyPlanning
+      summary: Consulter le planning du samedi au vendredi
+      responses:
+        '200':
+          description: Les sept jours, y compris ceux sans séance
+    post:
+      tags: [Planning et présences]
+      operationId: createPlanningSession
+      summary: Ajouter une séance récurrente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanningRequest'
+      responses:
+        '201':
+          description: Séance ajoutée
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /plannings/{planningId}:
+    parameters:
+      - name: planningId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    patch:
+      tags: [Planning et présences]
+      operationId: updatePlanningSession
+      summary: Modifier une séance du planning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlanningRequest'
+      responses:
+        '200':
+          description: Séance modifiée
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /plannings/{planningId}/presences:
+    parameters:
+      - name: planningId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Planning et présences]
+      operationId: getClassAttendance
+      summary: Consulter la liste d'appel d'une séance
+      parameters:
+        - name: date_cours
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Élèves actifs de la classe avec leur statut d'appel
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    put:
+      tags: [Planning et présences]
+      operationId: recordClassAttendance
+      summary: Saisir l'appel pour une date de cours
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceSubmissionRequest'
+      responses:
+        '200':
+          description: Présences enregistrées
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /eleves/{eleveId}/exemplarite:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Exemplarité]
+      operationId: recordMonthlyExemplarite
+      summary: Évaluer les cinq critères mensuels (0 à 4)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonthlyExemplariteRequest'
+      responses:
+        '200':
+          description: Évaluation enregistrée et score recalculé
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /admin/eleve-du-mois:
+    get:
+      tags: [Exemplarité]
+      operationId: getStudentOfTheMonth
+      summary: Calculer le score et le classement mensuels
+      parameters:
+        - name: mois
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+      responses:
+        '200':
+          description: Gagnant et classement des dossiers dont les trois composantes sont disponibles
+          content:
+            application/json:
+              example:
+                data:
+                  mois: "2026-10"
+                  gagnant:
+                    score_total: 87.5
+                  classement: []
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
   /tuteur/enfants/{eleveId}/synthese:
     parameters:
       - $ref: '#/components/parameters/StudentId'
@@ -850,6 +1204,26 @@ paths:
                         note: 16.0
                         sur: 20
                         date: "2026-10-05"
+                  comportement:
+                    mois: "2026-10"
+                    assiduite_ponctualite: 4
+                    discipline_comportement: 3
+                    proprete_hygiene: 4
+                    camaraderie_respect: 4
+                    prieres_devotion: 3
+                  presences:
+                    periode:
+                      du: "2026-10-01"
+                      au: "2027-09-30"
+                    totaux:
+                      present: 12
+                      absent: 1
+                      retard: 2
+                      excuse: 0
+                    dernieres:
+                      - date: "2026-10-05"
+                        statut: present
+                  activite_hebdomadaire: []
                   mise_a_jour: "2026-10-07T20:00:00Z"
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1147,6 +1521,89 @@ components:
         oustaz_id:
           type: integer
           minimum: 1
+    QuranMarker:
+      type: object
+      additionalProperties: false
+      required: [sourate_debut_id, verset_debut, sourate_fin_id, verset_fin]
+      properties:
+        sourate_debut_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_debut: { type: integer, minimum: 1 }
+        sourate_fin_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_fin: { type: integer, minimum: 1 }
+    CreateWeeklySheetRequest:
+      type: object
+      required: [eleve_id, date_debut, date_fin, sourate_debut_id, verset_debut, sourate_fin_id, verset_fin]
+      properties:
+        eleve_id: { type: integer, minimum: 1 }
+        date_debut: { type: string, format: date, description: Samedi }
+        date_fin: { type: string, format: date, description: Vendredi suivant }
+        sourate_debut_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_debut: { type: integer, minimum: 1 }
+        sourate_fin_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_fin: { type: integer, minimum: 1 }
+    UpdateWeeklySheetRequest:
+      type: object
+      minProperties: 1
+      properties:
+        date_debut: { type: string, format: date }
+        date_fin: { type: string, format: date }
+        sourate_debut_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_debut: { type: integer, minimum: 1 }
+        sourate_fin_id: { type: integer, minimum: 1, maximum: 114 }
+        verset_fin: { type: integer, minimum: 1 }
+    DailyQuranRecordRequest:
+      type: object
+      properties:
+        reperes:
+          type: object
+          properties:
+            D: { oneOf: [{ $ref: '#/components/schemas/QuranMarker' }, { type: 'null' }] }
+            J: { oneOf: [{ $ref: '#/components/schemas/QuranMarker' }, { type: 'null' }] }
+            M: { oneOf: [{ $ref: '#/components/schemas/QuranMarker' }, { type: 'null' }] }
+        qualite_recitation: { type: [integer, 'null'], minimum: 0, maximum: 4 }
+    CreatePlanningRequest:
+      type: object
+      required: [jour, heure_debut, heure_fin, activite]
+      properties:
+        jour:
+          type: string
+          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+        heure_debut: { type: string, pattern: '^\d{2}:\d{2}$' }
+        heure_fin: { type: string, pattern: '^\d{2}:\d{2}$' }
+        activite: { type: string, maxLength: 120 }
+    UpdatePlanningRequest:
+      type: object
+      minProperties: 1
+      properties:
+        jour:
+          type: string
+          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+        heure_debut: { type: string, pattern: '^\d{2}:\d{2}$' }
+        heure_fin: { type: string, pattern: '^\d{2}:\d{2}$' }
+        activite: { type: string, maxLength: 120 }
+    AttendanceSubmissionRequest:
+      type: object
+      required: [date_cours, presences]
+      properties:
+        date_cours: { type: string, format: date }
+        presences:
+          type: array
+          items:
+            type: object
+            required: [eleve_id, statut]
+            properties:
+              eleve_id: { type: integer, minimum: 1 }
+              statut: { type: string, enum: [present, absent, retard, excuse] }
+    MonthlyExemplariteRequest:
+      type: object
+      required: [mois, assiduite_ponctualite, discipline_comportement, proprete_hygiene, camaraderie_respect, prieres_devotion]
+      properties:
+        mois: { type: string, pattern: '^\d{4}-\d{2}$' }
+        assiduite_ponctualite: { type: integer, minimum: 0, maximum: 4 }
+        discipline_comportement: { type: integer, minimum: 0, maximum: 4 }
+        proprete_hygiene: { type: integer, minimum: 0, maximum: 4 }
+        camaraderie_respect: { type: integer, minimum: 0, maximum: 4 }
+        prieres_devotion: { type: integer, minimum: 0, maximum: 4 }
     ArchiveRequest:
       type: object
       additionalProperties: false
@@ -1181,7 +1638,7 @@ components:
       properties:
         data:
           type: object
-          required: [eleve, annee_scolaire, progression]
+          required: [eleve, annee_scolaire, progression, presences, activite_hebdomadaire]
           properties:
             eleve:
               type: object
@@ -1211,7 +1668,7 @@ components:
                   type: [number, 'null']
                 tendance:
                   type: string
-                  enum: [en_hausse, stable, en_baisse, non_evalue]
+                  enum: [en_hausse, stable, en_baisse, evalue, non_evalue]
                 dernieres_evaluations:
                   type: array
                   items:
@@ -1226,6 +1683,49 @@ components:
                       date:
                         type: string
                         format: date
+            comportement:
+              type: [object, 'null']
+              properties:
+                mois: { type: string, pattern: '^\d{4}-\d{2}$' }
+                assiduite_ponctualite: { type: integer, minimum: 0, maximum: 4 }
+                discipline_comportement: { type: integer, minimum: 0, maximum: 4 }
+                proprete_hygiene: { type: integer, minimum: 0, maximum: 4 }
+                camaraderie_respect: { type: integer, minimum: 0, maximum: 4 }
+                prieres_devotion: { type: integer, minimum: 0, maximum: 4 }
+            presences:
+              type: object
+              properties:
+                periode:
+                  type: object
+                  properties:
+                    du: { type: string, format: date }
+                    au: { type: string, format: date }
+                totaux:
+                  type: object
+                  properties:
+                    present: { type: integer }
+                    absent: { type: integer }
+                    retard: { type: integer }
+                    excuse: { type: integer }
+                dernieres:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      date: { type: string, format: date }
+                      statut: { type: string, enum: [present, absent, retard, excuse] }
+            activite_hebdomadaire:
+              type: array
+              items:
+                type: object
+                properties:
+                  statut: { type: string, enum: [brouillon, soumise, validee] }
+                  notes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        qualite_recitation: { type: [integer, 'null'], minimum: 0, maximum: 4 }
             mise_a_jour:
               type: string
               format: date-time

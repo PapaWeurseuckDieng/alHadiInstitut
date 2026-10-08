@@ -21,6 +21,7 @@ class FicheHebdomadaire extends Model
         'verset_fin',
         'debut_revision',
         'fin_revision',
+        'statut',
     ];
 
     protected function casts(): array

@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Jours de cours de l'institut (samedi → mercredi).
+ * Jours de cours de l'institut (samedi → vendredi).
  */
 enum Jour: string
 {
@@ -12,4 +12,6 @@ enum Jour: string
     case Lundi = 'lundi';
     case Mardi = 'mardi';
     case Mercredi = 'mercredi';
+    case Jeudi = 'jeudi';
+    case Vendredi = 'vendredi';
 }
