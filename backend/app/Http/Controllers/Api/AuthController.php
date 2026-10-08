@@ -9,10 +9,8 @@ use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
@@ -73,15 +71,15 @@ class AuthController extends Controller
         ]);
     }
 
-    public function changePassword(Request $request): Response
+    public function changePassword(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'new_password' => [
                 'required',
                 'string',
+                'min:6',
                 'confirmed',
                 'not_in:passer',
-                Password::min(12)->mixedCase()->numbers()->symbols(),
             ],
         ], [
             'new_password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
@@ -106,7 +104,9 @@ class AuthController extends Controller
 
         $user->tokens()->delete();
 
-        return response()->noContent();
+        return response()->json([
+            'message' => 'Mot de passe modifié. Vous pouvez vous connecter.',
+        ]);
     }
 
     public function me(Request $request): UserResource

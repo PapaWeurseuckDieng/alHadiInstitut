@@ -23,6 +23,8 @@ class Inscription extends Model
         return [
             'date_inscription' => 'date',
             'montant_inscription' => 'decimal:2',
+            'is_archived' => 'boolean',
+            'archived_at' => 'datetime',
         ];
     }
 

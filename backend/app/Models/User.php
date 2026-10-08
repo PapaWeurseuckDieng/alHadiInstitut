@@ -26,6 +26,7 @@ class User extends Authenticatable
         'matricule',
         'nom',
         'prenom',
+        'sexe',
         'photo',
         'date_naissance',
         'telephone',
@@ -59,6 +60,8 @@ class User extends Authenticatable
             'role' => Role::class,
             'statut' => StatutUtilisateur::class,
             'must_change_password' => 'boolean',
+            'is_archived' => 'boolean',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -92,7 +95,7 @@ class User extends Authenticatable
 
     public function estActif(): bool
     {
-        return $this->statut === StatutUtilisateur::Actif;
+        return $this->statut === StatutUtilisateur::Actif && ! $this->is_archived;
     }
 
     public function tuteur(): HasOne

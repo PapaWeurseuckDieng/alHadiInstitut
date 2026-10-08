@@ -20,7 +20,11 @@ class Eleve extends Model
 
     protected function casts(): array
     {
-        return ['date_naissance' => 'date'];
+        return [
+            'date_naissance' => 'date',
+            'is_archived' => 'boolean',
+            'archived_at' => 'datetime',
+        ];
     }
 
     public function tuteurs(): BelongsToMany
