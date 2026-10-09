@@ -182,6 +182,7 @@ class SuiviCoraniqueController extends Controller
                 foreach (['sourate_debut', 'verset_debut', 'sourate_fin', 'verset_fin'] as $field) {
                     $record->{$prefix.'_'.$field} = null;
                 }
+
                 continue;
             }
             $this->validateQuranRange(
@@ -485,10 +486,12 @@ class SuiviCoraniqueController extends Controller
         foreach ($intervals as $interval) {
             if ($current === null) {
                 $current = $interval;
+
                 continue;
             }
             if ($interval[0] <= $current[1] + 1) {
                 $current[1] = max($current[1], $interval[1]);
+
                 continue;
             }
             $count += $current[1] - $current[0] + 1;

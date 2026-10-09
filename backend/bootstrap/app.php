@@ -72,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 ? null
                 : response()->json(['message' => $message], $e->getStatusCode());
         });
-        $exceptions->render(function (\Throwable $e, Request $request) {
+        $exceptions->render(function (Throwable $e, Request $request) {
             if (! $request->is('api/*') || $e instanceof ValidationException) {
                 return null;
             }
