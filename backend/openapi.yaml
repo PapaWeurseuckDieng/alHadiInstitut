@@ -876,7 +876,7 @@ paths:
       tags: [Suivi coranique]
       operationId: createWeeklySheet
       summary: Créer une fiche hebdomadaire en brouillon
-      description: La période doit commencer un samedi et se terminer le vendredi suivant.
+      description: La période couvre les jours de cours, du samedi au mercredi inclus.
       requestBody:
         required: true
         content:
@@ -963,7 +963,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+          enum: [samedi, dimanche, lundi, mardi, mercredi]
     put:
       tags: [Suivi coranique]
       operationId: saveDailyQuranMarkers
@@ -1036,7 +1036,7 @@ paths:
     get:
       tags: [Planning et présences]
       operationId: getWeeklyPlanning
-      summary: Consulter le planning du samedi au vendredi
+      summary: Consulter le planning des jours de cours, du samedi au mercredi
       responses:
         '200':
           description: Les sept jours, y compris ceux sans séance
@@ -1567,7 +1567,7 @@ components:
       properties:
         jour:
           type: string
-          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+          enum: [samedi, dimanche, lundi, mardi, mercredi]
         heure_debut: { type: string, pattern: '^\d{2}:\d{2}$' }
         heure_fin: { type: string, pattern: '^\d{2}:\d{2}$' }
         activite: { type: string, maxLength: 120 }
@@ -1577,7 +1577,7 @@ components:
       properties:
         jour:
           type: string
-          enum: [samedi, dimanche, lundi, mardi, mercredi, jeudi, vendredi]
+          enum: [samedi, dimanche, lundi, mardi, mercredi]
         heure_debut: { type: string, pattern: '^\d{2}:\d{2}$' }
         heure_fin: { type: string, pattern: '^\d{2}:\d{2}$' }
         activite: { type: string, maxLength: 120 }

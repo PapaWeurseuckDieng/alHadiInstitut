@@ -508,7 +508,7 @@ class DaaraManagementTest extends TestCase
         $fiche = $this->postJson('/api/v1/fiches-hebdomadaires', [
             'eleve_id' => $eleve->id,
             'date_debut' => '2026-10-03',
-            'date_fin' => '2026-10-09',
+            'date_fin' => '2026-10-07',
             'sourate_debut_id' => 1,
             'verset_debut' => 1,
             'sourate_fin_id' => 1,
@@ -546,7 +546,7 @@ class DaaraManagementTest extends TestCase
             ->assertJsonPath('data.gagnant.score_total', 70);
     }
 
-    public function test_planning_sept_jours_et_prise_de_presence_par_seance(): void
+    public function test_planning_samedi_a_mercredi_et_prise_de_presence_par_seance(): void
     {
         $oustazUser = User::factory()->role(Role::Oustaz)->create();
         $oustaz = Oustaz::create(['user_id' => $oustazUser->id]);
@@ -567,7 +567,7 @@ class DaaraManagementTest extends TestCase
         ]);
 
         $planning = $this->actingAs($oustazUser)->postJson('/api/v1/classes/'.$classe->id.'/planning', [
-            'jour' => 'vendredi',
+            'jour' => 'mercredi',
             'heure_debut' => '09:00',
             'heure_fin' => '11:00',
             'activite' => 'Cours de mémorisation',
@@ -575,12 +575,20 @@ class DaaraManagementTest extends TestCase
 
         $this->getJson('/api/v1/classes/'.$classe->id.'/planning')
             ->assertOk()
-            ->assertJsonStructure(['data' => ['semaine' => ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi']]]);
+            ->assertJsonStructure(['data' => ['semaine' => ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi']]])
+            ->assertJsonMissingPath('data.semaine.jeudi')
+            ->assertJsonMissingPath('data.semaine.vendredi');
+        $this->postJson('/api/v1/classes/'.$classe->id.'/planning', [
+            'jour' => 'jeudi',
+            'heure_debut' => '09:00',
+            'heure_fin' => '11:00',
+            'activite' => 'Jour non travaillé',
+        ])->assertUnprocessable()->assertJsonValidationErrors('jour');
         $this->putJson('/api/v1/plannings/'.$planning['id'].'/presences', [
-            'date_cours' => '2026-10-02',
+            'date_cours' => '2026-10-07',
             'presences' => [['eleve_id' => $eleve->id, 'statut' => 'present']],
         ])->assertOk()->assertJsonPath('data.nombre_eleves', 1);
-        $this->getJson('/api/v1/plannings/'.$planning['id'].'/presences?date_cours=2026-10-02')
+        $this->getJson('/api/v1/plannings/'.$planning['id'].'/presences?date_cours=2026-10-07')
             ->assertOk()
             ->assertJsonPath('data.eleves.0.eleve_id', $eleve->id)
             ->assertJsonPath('data.eleves.0.statut', 'present');

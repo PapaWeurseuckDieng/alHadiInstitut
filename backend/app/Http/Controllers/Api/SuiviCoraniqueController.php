@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class SuiviCoraniqueController extends Controller
 {
-    private const JOURS = ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+    private const JOURS = ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi'];
 
     public function sourates(): JsonResponse
     {
@@ -156,7 +156,7 @@ class SuiviCoraniqueController extends Controller
         $fiche = $this->findAccessibleFiche($request, $ficheId);
         $this->requireDraft($fiche);
         if (! in_array($jour, self::JOURS, true)) {
-            throw ValidationException::withMessages(['jour' => ['Le jour doit être compris entre samedi et vendredi.']]);
+            throw ValidationException::withMessages(['jour' => ['Le jour doit être compris entre samedi et mercredi.']]);
         }
 
         $rules = ['qualite_recitation' => ['sometimes', 'nullable', 'integer', 'between:0,4']];
@@ -322,9 +322,9 @@ class SuiviCoraniqueController extends Controller
     private function validateWeek(string $startDate, string $endDate): void
     {
         $start = Carbon::parse($startDate);
-        if ($start->dayOfWeekIso !== Carbon::SATURDAY || $endDate !== $start->copy()->addDays(6)->toDateString()) {
+        if ($start->dayOfWeekIso !== Carbon::SATURDAY || $endDate !== $start->copy()->addDays(4)->toDateString()) {
             throw ValidationException::withMessages([
-                'date_debut' => ['Une fiche doit couvrir une semaine complète, du samedi au vendredi.'],
+                'date_debut' => ['Une fiche doit couvrir les jours de cours, du samedi au mercredi.'],
             ]);
         }
     }

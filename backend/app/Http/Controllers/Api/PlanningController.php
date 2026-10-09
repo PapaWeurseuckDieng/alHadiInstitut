@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class PlanningController extends Controller
 {
-    private const JOURS = ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+    private const JOURS = ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi'];
 
     public function index(Request $request, int $classeId): JsonResponse
     {
@@ -44,7 +44,7 @@ class PlanningController extends Controller
             'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
             'activite' => ['required', 'string', 'max:120'],
         ]);
-        $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'jeudi' => 4, 'vendredi' => 5, 'samedi' => 6];
+        $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'samedi' => 6];
         $date = Carbon::today(config('app.timezone'));
         $date->addDays(($dayNumbers[$data['jour']] - $date->dayOfWeek + 7) % 7);
         $planning = Planning::create([
@@ -78,7 +78,7 @@ class PlanningController extends Controller
             throw ValidationException::withMessages(['heure_fin' => ['L’heure de fin doit être postérieure à l’heure de début.']]);
         }
         if (isset($data['jour'])) {
-            $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'jeudi' => 4, 'vendredi' => 5, 'samedi' => 6];
+            $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'samedi' => 6];
             $date = Carbon::today(config('app.timezone'));
             $date->addDays(($dayNumbers[$data['jour']] - $date->dayOfWeek + 7) % 7);
             $planning->date = $date->toDateString();
@@ -196,15 +196,13 @@ class PlanningController extends Controller
             1 => 'lundi',
             2 => 'mardi',
             3 => 'mercredi',
-            4 => 'jeudi',
-            5 => 'vendredi',
             6 => 'samedi',
         ][Carbon::parse($date)->dayOfWeek];
     }
 
     private function planningData(Planning $planning): array
     {
-        $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'jeudi' => 4, 'vendredi' => 5, 'samedi' => 6];
+        $dayNumbers = ['dimanche' => 0, 'lundi' => 1, 'mardi' => 2, 'mercredi' => 3, 'samedi' => 6];
         $today = Carbon::today(config('app.timezone'));
         $nextSession = $planning->jour_semaine === null
             ? $planning->date
