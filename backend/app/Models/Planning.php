@@ -13,6 +13,7 @@ class Planning extends Model
         'heure_debut',
         'heure_fin',
         'activite',
+        'jour_semaine',
     ];
 
     protected function casts(): array
