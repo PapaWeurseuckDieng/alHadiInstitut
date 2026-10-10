@@ -7,6 +7,8 @@
  *   n'ait jamais à manipuler directement les objets Response.
  */
 
+import { getLanguage, translate } from '../i18n/i18n'
+
 // URL de base de l'API. Aucune valeur sensible : seulement l'adresse du serveur.
 const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 
@@ -55,10 +57,7 @@ async function lireJson(response) {
  */
 export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
   if (!API_URL) {
-    throw new ApiError(
-      "L'adresse du serveur n'est pas configurée (VITE_API_URL).",
-      0,
-    )
+    throw new ApiError(translate('errors.noApiUrl'), 0)
   }
 
   const controleur = new AbortController()
@@ -67,6 +66,8 @@ export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
   const entetes = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
+    // Langue de l'interface : permettra au backend de répondre en arabe s'il est traduit un jour
+    'Accept-Language': getLanguage(),
   }
   // Le token Sanctum est transmis en Bearer pour les routes protégées.
   if (token) entetes.Authorization = `Bearer ${token}`
@@ -81,10 +82,7 @@ export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
     })
   } catch {
     // Serveur éteint, réseau coupé, CORS refusé ou délai dépassé.
-    throw new ApiError(
-      'Impossible de joindre le serveur. Vérifiez votre connexion puis réessayez.',
-      0,
-    )
+    throw new ApiError(translate('errors.network'), 0)
   } finally {
     clearTimeout(minuteur)
   }
@@ -93,7 +91,7 @@ export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
 
   if (!response.ok) {
     throw new ApiError(
-      donnees?.message || 'Une erreur est survenue. Veuillez réessayer.',
+      donnees?.message || translate('errors.generic'),
       response.status,
       donnees?.errors ?? {},
     )

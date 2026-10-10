@@ -1,0 +1,365 @@
+/* ==========================================================================
+   Reçu de paiement : affichage à l'écran + impression A5 (ou PDF).
+   ========================================================================== */
+
+.recu-page {
+  --recu-green: var(--color-primary, #0f5132);
+  --recu-gold: var(--color-accent, #ca8a04);
+  --recu-red: var(--color-danger, #991b1b);
+  --recu-line: #e2e8f0;
+  --recu-muted: #64748b;
+
+  min-height: 100svh;
+  padding: 24px 16px 48px;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #0f172a);
+}
+
+/* ---------- Barre d'outils ---------- */
+
+.recu-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto 16px;
+}
+
+.recu-toolbar .db-button,
+.recu-cancel .db-button {
+  /* Boutons du tableau de bord, recopiés ici (la page n'est pas dans .db-shell) */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--recu-green);
+  border-radius: 10px;
+  background: var(--recu-green);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.recu-toolbar .db-button--secondary {
+  border-color: var(--recu-line);
+  background: #ffffff;
+  color: var(--color-text, #0f172a);
+}
+
+.recu-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recu-cancel-btn {
+  color: var(--recu-red) !important;
+}
+
+.recu-cancel {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto 16px;
+  padding: 16px;
+  border: 1px solid #f3caca;
+  border-radius: 12px;
+  background: #fef2f2;
+}
+
+.recu-cancel label {
+  font-weight: 600;
+}
+
+.recu-cancel input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+}
+
+.recu-cancel p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--recu-muted);
+}
+
+.recu-cancel .recu-cancel-confirm {
+  justify-self: start;
+  border-color: var(--recu-red);
+  background: var(--recu-red);
+}
+
+.recu-error,
+.recu-loading {
+  max-width: 720px;
+  margin: 0 auto 16px;
+}
+
+.recu-loading {
+  color: var(--recu-muted);
+}
+
+/* ---------- Reçu ---------- */
+
+.recu {
+  position: relative;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 36px 24px;
+  overflow: hidden;
+  border: 1px solid var(--recu-line);
+  border-top: 6px solid var(--recu-green);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 50px -30px rgba(15, 23, 42, 0.35);
+}
+
+.recu-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--recu-line);
+}
+
+.recu-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.recu-institut strong {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--recu-green);
+}
+
+.recu-institut span {
+  font-size: 0.875rem;
+  color: var(--recu-muted);
+}
+
+.recu-title {
+  text-align: end;
+}
+
+.recu-title h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.recu-title p {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--recu-muted);
+}
+
+.recu-title p:first-of-type {
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+}
+
+.recu-cancelled {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-inline-start: 4px solid var(--recu-red);
+  border-radius: 8px;
+  background: #fef2f2;
+  color: var(--recu-red);
+  font-weight: 600;
+}
+
+/* Tampon « ANNULÉ » en travers du reçu */
+.recu-stamp {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  padding: 6px 28px;
+  border: 4px solid var(--recu-red);
+  border-radius: 10px;
+  color: var(--recu-red);
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  opacity: 0.22;
+  transform: translate(-50%, -50%) rotate(-14deg);
+  pointer-events: none;
+}
+
+.recu-amount {
+  margin: 20px 0;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: #e8f1ec;
+  text-align: center;
+}
+
+.recu-amount span {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--recu-muted);
+}
+
+.recu-amount strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 2rem;
+  color: var(--recu-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.recu-amount p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.recu-amount em {
+  font-weight: 600;
+}
+
+.recu-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+  margin: 0;
+}
+
+.recu-details > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--recu-line);
+}
+
+.recu-details dt {
+  font-size: 0.875rem;
+  color: var(--recu-muted);
+}
+
+.recu-details dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: end;
+}
+
+/* Montants : jamais coupés sur deux lignes */
+.recu-details .recu-money {
+  white-space: nowrap;
+}
+
+.recu-rest dd {
+  color: var(--recu-red);
+}
+
+.recu-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 28px;
+}
+
+.recu-signatures div {
+  padding-top: 56px;
+  border-bottom: 1px solid #94a3b8;
+  font-size: 0.8125rem;
+  color: var(--recu-muted);
+  text-align: center;
+}
+
+.recu-footer {
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 3px solid var(--recu-gold);
+  font-size: 0.75rem;
+  color: var(--recu-muted);
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .recu {
+    padding: 22px 18px 18px;
+  }
+
+  .recu-header {
+    grid-template-columns: auto 1fr;
+  }
+
+  .recu-title {
+    grid-column: 1 / -1;
+    text-align: start;
+  }
+
+  .recu-details,
+  .recu-signatures {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Impression : uniquement le reçu, format A5 ---------- */
+
+/* Page nommée « recu » : le format A5 ne s'applique qu'à l'impression du reçu */
+.recu-page {
+  page: recu;
+}
+
+@page recu {
+  size: A5;
+  margin: 10mm;
+}
+
+@media print {
+  /* Fond blanc sur toute la feuille (le fond gris de l'application n'est pas imprimé) */
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  .recu-page {
+    min-height: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .recu-toolbar,
+  .recu-cancel,
+  .recu-error,
+  .recu-loading {
+    display: none !important;
+  }
+
+  .recu {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 11pt;
+  }
+
+  .recu-header {
+    padding-top: 4mm;
+    border-top: 2mm solid var(--recu-green);
+  }
+
+  /* Couleurs de fond conservées à l'impression */
+  .recu,
+  .recu * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .recu-details {
+    grid-template-columns: 1fr 1fr;
+  }
+}

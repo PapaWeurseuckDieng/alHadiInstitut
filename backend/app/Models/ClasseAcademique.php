@@ -17,12 +17,14 @@ class ClasseAcademique extends Model
         'annee_scolaire',
         'oustaz_id',
         'statut',
+        'mensualite',
     ];
 
     protected function casts(): array
     {
         return [
             'effectif' => 'integer',
+            'mensualite' => 'decimal:2',
             'is_archived' => 'boolean',
             'archived_at' => 'datetime',
         ];

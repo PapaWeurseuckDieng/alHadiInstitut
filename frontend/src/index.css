@@ -49,3 +49,17 @@ body {
 #root {
   min-height: 100svh;
 }
+
+/* ==========================================================================
+   Arabe (voir src/i18n) : police adaptée et pas d'espacement entre les lettres,
+   qui casserait la liaison des caractères arabes.
+   ========================================================================== */
+
+:root[lang='ar'] {
+  --font-sans: 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Geeza Pro', 'Arial', sans-serif;
+  line-height: 1.6;
+}
+
+:root[lang='ar'] body * {
+  letter-spacing: normal !important;
+}

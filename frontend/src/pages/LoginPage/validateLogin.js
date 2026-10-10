@@ -2,7 +2,9 @@
  * Validation côté client du formulaire de connexion.
  * Reprend les règles du LoginRequest Laravel (telephone requis, max 20 ;
  * password requis) pour éviter un aller-retour serveur inutile.
+ * Les messages sont traduits dans la langue courante (voir src/i18n).
  */
+import { translate } from '../../i18n/i18n'
 
 // Caractères que le backend retire lui-même avant comparaison.
 const SEPARATEURS = /[\s.\-()]/g
@@ -16,15 +18,15 @@ export function validateLogin({ telephone, password }) {
   const numero = telephone.replace(SEPARATEURS, '')
 
   if (!numero) {
-    erreurs.telephone = 'Saisissez votre numéro de téléphone.'
+    erreurs.telephone = translate('login.errors.phoneRequired')
   } else if (!/^\+?\d+$/.test(numero)) {
-    erreurs.telephone = 'Le numéro ne doit contenir que des chiffres (et éventuellement + au début).'
+    erreurs.telephone = translate('login.errors.phoneDigits')
   } else if (numero.length > 20) {
-    erreurs.telephone = 'Le numéro ne doit pas dépasser 20 chiffres.'
+    erreurs.telephone = translate('login.errors.phoneTooLong')
   }
 
   if (!password) {
-    erreurs.password = 'Saisissez votre mot de passe.'
+    erreurs.password = translate('login.errors.passwordRequired')
   }
 
   return erreurs

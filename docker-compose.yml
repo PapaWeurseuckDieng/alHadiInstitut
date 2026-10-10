@@ -10,6 +10,21 @@ services:
       - db
     env_file: ./backend/.env
 
+  # Planificateur Laravel : lance chaque jour le rappel WhatsApp des mensualités
+  # (php artisan paiements:rappels, voir backend/routes/console.php)
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    command: php artisan schedule:work
+    volumes:
+      - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    depends_on:
+      - db
+    env_file: ./backend/.env
+    restart: unless-stopped
+
   webserver:
     image: nginx:alpine
     ports:

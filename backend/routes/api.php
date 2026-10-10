@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ClasseController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EleveController;
 use App\Http\Controllers\Api\InscriptionController;
+use App\Http\Controllers\Api\PaiementController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -47,12 +48,23 @@ Route::prefix('v1')->group(function () {
             Route::post('inscriptions-annuelles', [InscriptionController::class, 'store']);
             Route::post('classes', [ClasseController::class, 'store']);
             Route::patch('classes/{classeId}', [ClasseController::class, 'update']);
+
+            // Mensualités : paiements reçus au secrétariat, reçus, tarifs et rappels WhatsApp
+            Route::get('paiements', [PaiementController::class, 'index']);
+            Route::post('paiements', [PaiementController::class, 'store']);
+            Route::get('paiements/tarifs', [PaiementController::class, 'tarifs']);
+            Route::put('paiements/tarifs', [PaiementController::class, 'updateTarifs']);
+            Route::get('paiements/rappels', [PaiementController::class, 'rappels']);
+            Route::post('paiements/rappels', [PaiementController::class, 'envoyerRappels']);
+            Route::get('paiements/{paiementId}/recu', [PaiementController::class, 'recu'])->whereNumber('paiementId');
+            Route::post('paiements/{paiementId}/annuler', [PaiementController::class, 'annuler'])->whereNumber('paiementId');
         });
         Route::middleware('role:admin,oustaz')->group(function () {
             Route::get('classes', [ClasseController::class, 'index']);
             Route::get('classes/{classeId}/eleves', [ClasseController::class, 'students']);
         });
         Route::middleware('role:tuteur')->get('tuteur/me/eleves', [EleveController::class, 'mine']);
+        Route::middleware('role:tuteur')->get('tuteur/me/paiements', [PaiementController::class, 'mine']);
         Route::middleware('role:tuteur')->get('tuteur/enfants/{eleveId}/synthese', [EleveController::class, 'childSummary']);
         Route::middleware('role:oustaz')->get('oustaz/me/classes', [ClasseController::class, 'mine']);
     });
