@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useI18n } from '../../i18n/useI18n'
 import './PasswordInput.css'
 
 /**
@@ -13,6 +14,7 @@ import './PasswordInput.css'
 export default function PasswordInput({ className = '', ...inputProps }) {
   // true = mot de passe lisible en clair
   const [visible, setVisible] = useState(false)
+  const { t } = useI18n()
 
   return (
     <div className="password-input">
@@ -25,7 +27,7 @@ export default function PasswordInput({ className = '', ...inputProps }) {
         type="button"
         className="password-input__toggle"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+        aria-label={visible ? t('password.hide') : t('password.show')}
         aria-pressed={visible}
         disabled={inputProps.disabled}
       >

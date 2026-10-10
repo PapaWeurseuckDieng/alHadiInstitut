@@ -1,0 +1,72 @@
+/* Bouton de changement de langue */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 999px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lang-switch:hover {
+  border-color: var(--color-primary, #0f5132);
+  color: var(--color-primary, #0f5132);
+}
+
+.lang-switch:focus-visible {
+  outline: 2px solid var(--color-accent, #ca8a04);
+  outline-offset: 2px;
+}
+
+.lang-switch svg {
+  flex: none;
+}
+
+/* Variante sur fond vert */
+.lang-switch--light {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.lang-switch--light:hover {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* Abréviation : masquée par défaut */
+.lang-switch__short {
+  display: none;
+}
+
+/*
+ * Version compacte (petits écrans) : seule l'abréviation est visible ;
+ * le nom complet reste dans le bouton pour les lecteurs d'écran.
+ */
+.lang-switch--compact {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.lang-switch--compact .lang-switch__short {
+  display: inline;
+  font-size: 0.9375rem;
+}
+
+.lang-switch--compact .lang-switch__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
