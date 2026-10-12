@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import LanguageSwitcher from '../../components/LanguageSwitcher/LanguageSwitcher'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
+import { useI18n } from '../../i18n/useI18n'
 import { login } from '../../services/authService'
 import { validateLogin } from './validateLogin'
 import './LoginPage.css'
 
 const VALEURS_INITIALES = { telephone: '', password: '' }
 
-// Domaines couverts par la plateforme, affichés dans le panneau d'accueil.
-const MODULES = ['Élèves & inscriptions', 'Classes académiques', 'Comptes & accès']
+// Domaines couverts par la plateforme, affichés dans le panneau d'accueil (clés de traduction).
+const MODULES = ['dash.sections.eleves', 'dash.sections.classes', 'dash.sections.users']
 
 /**
  * Page de connexion : numéro de téléphone + mot de passe.
@@ -19,6 +21,10 @@ const MODULES = ['Élèves & inscriptions', 'Classes académiques', 'Comptes & a
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t, serverMessage } = useI18n()
+
+  // Message laissé par un autre écran : clé de traduction (ex. mot de passe modifié) ou texte
+  const messageInfo = location.state?.messageKey ? t(location.state.messageKey) : location.state?.message
 
   const [valeurs, setValeurs] = useState(VALEURS_INITIALES)
   // Erreurs affichées sous chaque champ (validation locale ou 422 Laravel)
@@ -88,8 +94,8 @@ export default function LoginPage() {
         setErreursChamps(erreursServeur)
         focusPremiereErreur(erreursServeur)
       } else {
-        // 401 / 403 / 429 : le backend fournit déjà un message en français.
-        setErreurGenerale(erreur.message)
+        // 401 / 403 / 429 : message du backend (en français), traduit si l'interface est en arabe.
+        setErreurGenerale(erreur.status ? serverMessage(erreur.message, erreur.status) : erreur.message)
       }
       // Par sécurité, on vide le mot de passe après un échec.
       setValeurs((prev) => ({ ...prev, password: '' }))
@@ -105,16 +111,16 @@ export default function LoginPage() {
       <aside className="login__brand">
         <div className="login__brand-content">
           <p className="login__brand-title">
-            Bienvenue à l'<span className="login__nowrap">Institut Al-Hadi</span>
+            {t('login.welcome')}<span className="login__nowrap">{t('common.instituteName')}</span>
           </p>
           <span className="login__rule" aria-hidden="true" />
           <p className="login__brand-text">
-            Un seul espace pour l’administration, les enseignants et les tuteurs.
+            {t('login.brandText')}
           </p>
           <ul className="login__modules">
             {MODULES.map((module) => (
               <li key={module} className="login__module">
-                {module}
+                {t(module)}
               </li>
             ))}
           </ul>
@@ -126,19 +132,22 @@ export default function LoginPage() {
         {/* Bandeau affiché uniquement sur mobile (le message n'apparaît que sur les grands téléphones) */}
         <div className="login__band" aria-hidden="true">
           <p className="login__band-title">
-            Bienvenue à l'<span className="login__nowrap">Institut Al-Hadi</span>
+            {t('login.welcome')}<span className="login__nowrap">{t('common.instituteName')}</span>
           </p>
         </div>
 
         <div className="login__card">
+          {/* Choix de la langue : coin supérieur de la carte (en fin de ligne : à droite en français, à gauche en arabe) */}
+          <LanguageSwitcher className="login__lang" />
+
           {/* Logo d'origine, même taille sur ordinateur et mobile.
               Le cadre recadre les marges transparentes du fichier SVG. */}
           <div className="login__logo">
-            <img src="/faviconDara.svg" alt="Institut Al-Hadi" className="login__logo-img" />
+            <img src="/faviconDara.svg" alt={t('common.instituteName')} className="login__logo-img" />
           </div>
 
-          <h1 className="login__title">Connexion</h1>
-          <p className="login__subtitle">Accédez à votre espace avec votre numéro de téléphone.</p>
+          <h1 className="login__title">{t('login.title')}</h1>
+          <p className="login__subtitle">{t('login.subtitle')}</p>
 
           {erreurGenerale && (
             <div className="login__alert login__alert--error" role="alert">
@@ -146,16 +155,16 @@ export default function LoginPage() {
             </div>
           )}
 
-          {location.state?.message && (
+          {messageInfo && (
             <div className="login__alert login__alert--success" role="status">
-              {location.state.message}
+              {messageInfo}
             </div>
           )}
 
           <form className="login__form" onSubmit={handleSubmit} noValidate>
             <div className="login__field">
               <label htmlFor="login-telephone" className="login__label">
-                Numéro de téléphone
+                {t('login.phone')}
               </label>
               <div className="login__control">
                 <IconeTelephone />
@@ -164,6 +173,7 @@ export default function LoginPage() {
                   name="telephone"
                   type="tel"
                   inputMode="tel"
+                  dir="ltr" /* un numéro se lit toujours de gauche à droite, même en arabe */
                   autoComplete="username"
                   className="login__input"
                   placeholder="77 123 45 67"
@@ -183,7 +193,7 @@ export default function LoginPage() {
 
             <div className="login__field">
               <label htmlFor="login-password" className="login__label">
-                Mot de passe
+                {t('login.password')}
               </label>
               <div className="login__control">
                 <IconeCadenas />
@@ -192,7 +202,7 @@ export default function LoginPage() {
                   name="password"
                   autoComplete="current-password"
                   className="login__input"
-                  placeholder="Votre mot de passe"
+                  placeholder={t('login.passwordPlaceholder')}
                   value={valeurs.password}
                   onChange={handleChange}
                   disabled={chargement}
@@ -214,16 +224,16 @@ export default function LoginPage() {
               aria-busy={chargement}
             >
               {chargement && <span className="login__spinner" aria-hidden="true" />}
-              {chargement ? 'Connexion en cours…' : 'Se connecter'}
+              {chargement ? t('login.submitting') : t('login.submit')}
             </button>
           </form>
         </div>
 
         {/* Pied de page : copyright et crédit développeur */}
         <footer className="login__footer">
-          <span className="login__footer-part">© {annee} Institut Al-Hadi.</span>{' '}
+          <span className="login__footer-part">© {annee} {t('common.instituteName')}.</span>{' '}
           <span className="login__footer-part">
-            Développé par{' '}
+            {t('common.developedBy')}{' '}
             <a href="https://xelltekk.com/" target="_blank" rel="noopener noreferrer">
               XELLTEKK
             </a>
@@ -234,7 +244,7 @@ export default function LoginPage() {
   )
 }
 
-/** Icône téléphone placée à gauche du champ (décorative). */
+/** Icône téléphone placée au début du champ (décorative). */
 function IconeTelephone() {
   return (
     <svg className="login__control-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -244,7 +254,7 @@ function IconeTelephone() {
   )
 }
 
-/** Icône cadenas placée à gauche du champ mot de passe (décorative). */
+/** Icône cadenas placée au début du champ mot de passe (décorative). */
 function IconeCadenas() {
   return (
     <svg className="login__control-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">

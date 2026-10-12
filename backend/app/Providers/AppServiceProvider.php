@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\WhatsApp\LogWhatsAppSender;
+use App\Services\WhatsApp\MetaWhatsAppSender;
+use App\Services\WhatsApp\WhatsAppSender;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,7 +17,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Rappels de paiement : envoi WhatsApp réel (Meta) ou simulation (logs), selon WHATSAPP_DRIVER.
+        $this->app->bind(WhatsAppSender::class, fn () => config('services.whatsapp.driver') === 'meta'
+            ? new MetaWhatsAppSender(config('services.whatsapp'))
+            : new LogWhatsAppSender);
     }
 
     /**

@@ -178,7 +178,7 @@
 .login__alert {
   margin-bottom: 1.25rem;
   padding: 0.75rem 1rem;
-  border-left: 3px solid;
+  border-inline-start: 3px solid; /* à gauche en français, à droite en arabe */
   border-radius: 8px;
   font-size: 0.9375rem;
   line-height: 1.45;
@@ -216,7 +216,7 @@
   color: var(--color-text);
 }
 
-/* Conteneur champ + icône à gauche */
+/* Conteneur champ + icône au début du champ (à gauche en français, à droite en arabe) */
 .login__control {
   position: relative;
 }
@@ -224,7 +224,7 @@
 .login__control-icon {
   position: absolute;
   top: 50%;
-  left: 0.875rem;
+  inset-inline-start: 0.875rem;
   z-index: 1;
   transform: translateY(-50%);
   color: #94a3b8;
@@ -239,7 +239,8 @@
   box-sizing: border-box;
   width: 100%;
   height: 3rem;
-  padding: 0 0.875rem 0 2.625rem; /* place pour l'icône à gauche */
+  padding-block: 0;
+  padding-inline: 2.625rem 0.875rem; /* place pour l'icône au début du champ */
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-bg);
@@ -249,9 +250,54 @@
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
 
-/* Champ mot de passe : garde aussi la place du bouton afficher/masquer à droite */
+/* Champ mot de passe : garde aussi la place du bouton afficher/masquer en fin de champ */
 .login__input.password-input__field {
-  padding-right: 3rem;
+  padding-inline-end: 3rem;
+}
+
+/*
+ * Numéro de téléphone en arabe : le champ est écrit de gauche à droite (dir="ltr")
+ * pour que « 77 123 45 67 » ne soit pas inversé, mais il reste aligné à droite
+ * et garde la place de l'icône à droite, comme les autres champs.
+ */
+[dir='rtl'] .login__input[dir='ltr'] {
+  padding-right: 2.625rem;
+  padding-left: 0.875rem;
+  text-align: right;
+}
+
+/* Bouton de langue : coin supérieur de la carte, en fin de ligne */
+.login__card {
+  position: relative;
+}
+
+.login__lang {
+  position: absolute;
+  top: 0.875rem;
+  inset-inline-end: 0.875rem;
+}
+
+/* Petits écrans : bouton de langue compact (globe + « ع » / « FR ») pour ne pas toucher le logo */
+@media (max-width: 899px) {
+  .login__lang {
+    top: 0.625rem;
+    inset-inline-end: 0.625rem;
+    min-height: 32px;
+    padding: 0 9px;
+  }
+
+  .login__lang .lang-switch__short {
+    display: inline;
+  }
+
+  .login__lang .lang-switch__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 
 .login__input::placeholder {

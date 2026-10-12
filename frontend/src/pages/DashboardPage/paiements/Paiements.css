@@ -1,0 +1,608 @@
+/* ==========================================================================
+   Rubrique « Paiements » (mensualités) et espace tuteur.
+   Reprend les variables et classes du tableau de bord (DashboardPage.css).
+   ========================================================================== */
+
+.pay {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------- Mois + outils ---------- */
+
+.pay-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pay-month {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  background: var(--db-surface);
+}
+
+.pay-month select {
+  min-width: 190px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--db-text);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------- Indicateurs ---------- */
+
+.pay-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pay-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 118px;
+  padding: 16px 18px;
+  border: 1px solid var(--db-line);
+  border-radius: var(--db-radius);
+  background: var(--db-surface);
+}
+
+.pay-stat-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--db-muted);
+}
+
+.pay-stat strong {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-stat-hint {
+  margin-top: auto;
+  font-size: 0.8125rem;
+  color: var(--db-subtle);
+}
+
+/* Encaissé : chiffre en vert + barre de progression */
+.pay-stat--green strong {
+  color: var(--db-green);
+}
+
+.pay-progress {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--db-green-soft);
+}
+
+.pay-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--db-green);
+}
+
+/* Reste à percevoir : touche dorée */
+.pay-stat--attention {
+  border-top: 3px solid var(--db-gold);
+  padding-top: 14px;
+}
+
+/* ---------- Rappels WhatsApp ---------- */
+
+.pay-reminders {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #bfd8c9;
+  border-radius: var(--db-radius);
+  background: var(--db-green-soft);
+}
+
+.pay-reminders-icon {
+  display: inline-flex;
+  flex: none;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--db-green);
+  color: #ffffff;
+}
+
+.pay-reminders h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px !important;
+  font-size: 1rem;
+}
+
+.pay-reminders p {
+  font-size: 0.9375rem;
+  color: var(--db-green-dark);
+}
+
+.pay-reminders-state {
+  margin-top: 4px !important;
+  font-weight: 600;
+}
+
+.pay-reminders-help {
+  margin-top: 6px !important;
+  font-size: 0.875rem !important;
+  color: var(--db-muted) !important;
+}
+
+.pay-error-text {
+  color: var(--db-red);
+}
+
+/* ---------- Filtres de la liste ---------- */
+
+.pay-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.pay-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--db-bg);
+}
+
+.pay-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--db-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.pay-tab:hover {
+  color: var(--db-text);
+}
+
+.pay-tab--active {
+  background: var(--db-surface);
+  color: var(--db-green);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.pay-tab-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--db-line-soft);
+  color: var(--db-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.pay-tab--active .pay-tab-count {
+  background: var(--db-green-soft);
+  color: var(--db-green);
+}
+
+.pay-filter-fields {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 280px;
+}
+
+.pay-filter-fields .db-search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.pay-select {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  background: var(--db-surface);
+  color: var(--db-text);
+}
+
+/* ---------- Tableau ---------- */
+
+/* Rechargement : l'ancien contenu reste visible, atténué */
+.pay-dimmed {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.pay-receipt-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--db-green);
+  text-decoration: none;
+}
+
+.pay-receipt-link:hover {
+  text-decoration: underline;
+}
+
+.pay-reminder-date {
+  margin-top: 4px;
+}
+
+.pay-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pay-collect,
+.pay-whatsapp {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+/* Impayé : rouge de la charte, en petite touche */
+.pay-badge--danger {
+  background: var(--db-red-soft);
+  color: var(--db-red);
+}
+
+/* ---------- Fenêtre d'encaissement ---------- */
+
+.pay-dialog {
+  width: min(600px, calc(100vw - 32px));
+}
+
+.pay-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  background: var(--db-bg);
+}
+
+.pay-summary strong {
+  display: block;
+}
+
+.pay-summary dl {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+}
+
+.pay-summary dt {
+  font-size: 0.8125rem;
+  color: var(--db-subtle);
+}
+
+.pay-summary dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-summary-rest dd {
+  color: var(--db-red);
+}
+
+.pay-amount-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pay-amount-field input {
+  padding-inline-end: 96px !important;
+  font-weight: 700;
+}
+
+/* Pas de flèches +/- dans les champs de montant (elles chevauchaient le bouton « Totalité ») */
+.pay-amount-field input::-webkit-outer-spin-button,
+.pay-amount-field input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.pay-amount-field input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.pay-full {
+  position: absolute;
+  inset-inline-end: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--db-green-soft);
+  color: var(--db-green);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.pay-currency {
+  position: absolute;
+  inset-inline-end: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--db-subtle);
+  pointer-events: none;
+}
+
+/* Étape « paiement enregistré » */
+.pay-success {
+  padding: 12px 0 4px;
+  text-align: center;
+}
+
+.pay-success-icon {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 50%;
+  background: var(--db-green);
+  color: #ffffff;
+}
+
+.pay-success-amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--db-green);
+}
+
+.pay-success-number {
+  margin-top: 8px !important;
+  font-weight: 600;
+}
+
+.pay-success-rest {
+  margin-top: 4px !important;
+  color: var(--db-red);
+}
+
+/* Tarifs par classe */
+.pay-tarif {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--db-line-soft);
+}
+
+.pay-tarif:first-of-type {
+  border-top: 0;
+}
+
+.pay-tarif label strong,
+.pay-tarif label small {
+  display: block;
+}
+
+.pay-tarif input {
+  width: 100%;
+  padding-inline-end: 56px !important;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.pay-tarif input:focus {
+  border-color: var(--db-green);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 81, 50, 0.14);
+}
+
+/* ---------- Espace tuteur ---------- */
+
+.pay-tuteur {
+  margin-top: 20px;
+}
+
+.pay-tuteur-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.pay-tuteur-child header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pay-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pay-month-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  background: var(--db-surface);
+}
+
+.pay-month-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.pay-month-state {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.pay-month-chip--paye {
+  border-color: #bfd8c9;
+  background: var(--db-green-soft);
+  color: var(--db-green);
+}
+
+.pay-month-chip--partiel {
+  border-color: rgba(202, 138, 4, 0.45);
+  background: var(--db-gold-soft);
+}
+
+.pay-month-chip--impaye {
+  border-color: #f3caca;
+  background: var(--db-red-soft);
+  color: var(--db-red);
+}
+
+.pay-month-chip--aVenir {
+  color: var(--db-subtle);
+  border-style: dashed;
+}
+
+/* ---------- Écrans ---------- */
+
+@media (max-width: 1100px) {
+  .pay-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pay-toolbar,
+  .pay-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pay-month {
+    justify-content: space-between;
+  }
+
+  .pay-month select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pay-stats {
+    gap: 12px;
+  }
+
+  .pay-stat {
+    min-height: 0;
+    padding: 12px 14px;
+  }
+
+  .pay-stat strong {
+    font-size: 1.125rem;
+  }
+
+  .pay-filters {
+    padding: 14px 16px;
+  }
+
+  .pay-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .pay-tab {
+    justify-content: center;
+    padding: 0 6px;
+  }
+
+  .pay-filter-fields {
+    min-width: 0;
+  }
+
+  .pay-filter-fields .db-search,
+  .pay-select {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .pay-row-actions {
+    justify-content: flex-end;
+  }
+
+  /* Élève à jour : pas de ligne « Actions » vide dans la carte */
+  .db-records td:empty {
+    display: none;
+  }
+
+  .pay-summary dl {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pay-tarif {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .pay-tuteur-list {
+    padding: 0 16px 16px;
+  }
+}
