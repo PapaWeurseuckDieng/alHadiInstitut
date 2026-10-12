@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EleveController;
 use App\Http\Controllers\Api\InscriptionController;
 use App\Http\Controllers\Api\PaiementController;
+use App\Http\Controllers\Api\PlanningController;
+use App\Http\Controllers\Api\SuiviCoraniqueController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
