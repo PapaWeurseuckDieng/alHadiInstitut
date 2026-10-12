@@ -365,9 +365,37 @@ class EleveController extends Controller
 
         $latestSheets = FicheHebdomadaire::with('notes')
             ->where('eleve_id', $eleve->id)
+            ->whereIn('statut', ['soumise', 'validee'])
             ->orderByDesc('date_fin')
             ->limit(5)
             ->get();
+        $yearStart = (int) substr(AnneeScolaire::courante(), 0, 4);
+        $presenceStart = sprintf('%04d-10-01', $yearStart);
+        $presenceEnd = sprintf('%04d-09-30', $yearStart + 1);
+        $presenceCounts = DB::table('presences')
+            ->where('eleve_id', $eleve->id)
+            ->whereBetween('date_cours', [$presenceStart, $presenceEnd])
+            ->select('statut', DB::raw('COUNT(*) as total'))
+            ->groupBy('statut')
+            ->pluck('total', 'statut');
+        $recentPresences = DB::table('presences')
+            ->where('eleve_id', $eleve->id)
+            ->whereBetween('date_cours', [$presenceStart, $presenceEnd])
+            ->orderByDesc('date_cours')
+            ->limit(10)
+            ->get(['date_cours', 'statut']);
+        $month = now(config('app.timezone'))->format('Y-m');
+        $behavior = DB::table('evaluations_exemplarite')
+            ->where('eleve_id', $eleve->id)
+            ->where('mois', $month)
+            ->first();
+        $recitationNotes = $latestSheets->flatMap(
+            fn (FicheHebdomadaire $fiche) => $fiche->notes->filter(fn ($note) => $note->qualite_recitation !== null)
+        )->values();
+        $recitationGrades = $recitationNotes->pluck('qualite_recitation');
+        $averageRecitation = $recitationGrades->isNotEmpty()
+            ? round($recitationGrades->avg() * 5, 2)
+            : null;
 
         return response()->json([
             'data' => [
@@ -384,10 +412,35 @@ class EleveController extends Controller
                     ]
                     : null,
                 'progression' => [
-                    'moyenne_periode' => null,
+                    'moyenne_periode' => $averageRecitation,
                     'moyenne_periode_precedente' => null,
-                    'tendance' => 'non_evalue',
-                    'dernieres_evaluations' => [],
+                    'tendance' => $averageRecitation === null ? 'non_evalue' : 'evalue',
+                    'dernieres_evaluations' => $recitationNotes->take(5)->map(fn ($note) => [
+                        'note' => round($note->qualite_recitation * 5, 2),
+                        'sur' => 20,
+                        'date' => $note->updated_at->toDateString(),
+                    ]),
+                ],
+                'comportement' => $behavior ? [
+                    'mois' => $behavior->mois,
+                    'assiduite_ponctualite' => $behavior->assiduite_ponctualite,
+                    'discipline_comportement' => $behavior->discipline_comportement,
+                    'proprete_hygiene' => $behavior->proprete_hygiene,
+                    'camaraderie_respect' => $behavior->camaraderie_respect,
+                    'prieres_devotion' => $behavior->prieres_devotion,
+                ] : null,
+                'presences' => [
+                    'periode' => ['du' => $presenceStart, 'au' => $presenceEnd],
+                    'totaux' => [
+                        'present' => (int) ($presenceCounts['present'] ?? 0),
+                        'absent' => (int) ($presenceCounts['absent'] ?? 0),
+                        'retard' => (int) ($presenceCounts['retard'] ?? 0),
+                        'excuse' => (int) ($presenceCounts['excuse'] ?? 0),
+                    ],
+                    'dernieres' => $recentPresences->map(fn ($presence) => [
+                        'date' => $presence->date_cours,
+                        'statut' => $presence->statut,
+                    ]),
                 ],
                 'activite_hebdomadaire' => $latestSheets->map(fn (FicheHebdomadaire $fiche) => [
                     'date_debut' => $fiche->date_debut->toDateString(),
@@ -401,7 +454,29 @@ class EleveController extends Controller
                         'nouvelle_lecon' => $note->nouvelle_lecon,
                         'revision_partielle' => $note->revision_partielle,
                         'revision_generale' => $note->revision_generale,
+                        'reperes' => [
+                            'D' => $note->d_sourate_debut === null ? null : [
+                                'sourate_debut_id' => $note->d_sourate_debut,
+                                'verset_debut' => $note->d_verset_debut,
+                                'sourate_fin_id' => $note->d_sourate_fin,
+                                'verset_fin' => $note->d_verset_fin,
+                            ],
+                            'J' => $note->j_sourate_debut === null ? null : [
+                                'sourate_debut_id' => $note->j_sourate_debut,
+                                'verset_debut' => $note->j_verset_debut,
+                                'sourate_fin_id' => $note->j_sourate_fin,
+                                'verset_fin' => $note->j_verset_fin,
+                            ],
+                            'M' => $note->m_sourate_debut === null ? null : [
+                                'sourate_debut_id' => $note->m_sourate_debut,
+                                'verset_debut' => $note->m_verset_debut,
+                                'sourate_fin_id' => $note->m_sourate_fin,
+                                'verset_fin' => $note->m_verset_fin,
+                            ],
+                        ],
+                        'qualite_recitation' => $note->qualite_recitation,
                     ]),
+                    'statut' => $fiche->statut,
                 ]),
                 'mise_a_jour' => now()->toIso8601String(),
             ],

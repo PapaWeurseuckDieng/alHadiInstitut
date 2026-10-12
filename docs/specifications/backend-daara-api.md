@@ -4,7 +4,7 @@
 
 Le dépôt utilise Laravel 12 / PHP 8.2+, Laravel Sanctum et MySQL 8 dans `docker-compose.yml`. Le contrat ci-dessous cible cette stack et fournit un DDL MySQL 8 autonome. L'API est versionnée sous `/api/v1`; les erreurs renvoient toujours un objet JSON dont `message` est en français.
 
-Cette spécification décrit le comportement cible demandé. Elle ne prétend pas que les contrôleurs et migrations actuels implémentent déjà l'ensemble de ces routes et contraintes.
+Cette spécification décrit les règles métier et les routes backend disponibles. Les migrations Laravel créent les tables nécessaires à partir d'une base vierge; les migrations existantes sont conservées pour les installations déjà déployées.
 
 ## 1. Schéma relationnel SQL
 
@@ -182,7 +182,7 @@ Exemples de frontière à tester :
 | 01/10/2026 | `2026-2027` |
 | 07/10/2026 | `2026-2027` |
 
-Un middleware peut ajouter `request->attributes->set('annee_scolaire', AnneeScolaire::courante())`. Les validateurs de création interdisent le champ `annee_scolaire` fourni par le client; une tentative de surcharge renvoie `422`.
+Les contrôleurs d'inscription et de création de classe utilisent directement `AnneeScolaire::courante()`; l'année est enregistrée par le serveur. Les validateurs de création interdisent le champ `annee_scolaire` fourni par le client; une tentative de surcharge renvoie `422`.
 
 ## 3. Endpoints REST
 
@@ -209,9 +209,35 @@ Base URL : `/api/v1`. Les identifiants `{userId}`, `{eleveId}`, `{classeId}` et 
 | `GET /classes` | Admin, Oustaz | Liste les classes de l'année courante par défaut |
 | `PATCH /classes/{classeId}` | Admin | Modifie la classe ou affecte un autre Oustaz |
 | `GET /classes/{classeId}/eleves` | Admin, Oustaz affecté | Liste les élèves inscrits dans cette classe |
+| `GET /referentiels/sourates` | Admin, Oustaz, Tuteur | Référentiel des 114 sourates et du nombre de versets |
+| `GET, POST /fiches-hebdomadaires` | Admin, Oustaz affecté | Lister ou créer une fiche du samedi au mercredi |
+| `GET, PATCH /fiches-hebdomadaires/{ficheId}` | Admin, Oustaz affecté | Consulter ou modifier une fiche en brouillon |
+| `PUT /fiches-hebdomadaires/{ficheId}/jours/{jour}` | Admin, Oustaz affecté | Saisir les repères D/J/M et la qualité de récitation (0 à 4) |
+| `POST /fiches-hebdomadaires/{ficheId}/soumettre` | Admin, Oustaz affecté | Soumettre une fiche en brouillon |
+| `POST /fiches-hebdomadaires/{ficheId}/valider` | Admin | Valider une fiche soumise |
+| `GET, POST /classes/{classeId}/planning` | Admin, Oustaz affecté | Lire ou ajouter une séance récurrente du samedi au mercredi |
+| `PATCH /plannings/{planningId}` | Admin, Oustaz affecté | Modifier une séance |
+| `GET, PUT /plannings/{planningId}/presences` | Admin, Oustaz affecté | Consulter ou saisir l'appel d'une date de cours |
+| `POST /eleves/{eleveId}/exemplarite` | Admin, Oustaz de l'élève | Enregistrer les cinq notes mensuelles d'exemplarité |
+| `GET /admin/eleve-du-mois?mois=YYYY-MM` | Admin | Calculer le score et le classement des élèves évalués |
 | `GET /tuteur/enfants/{eleveId}/synthese` | Tuteur rattaché | Synthèse de progression; vérifie le rattachement avant toute lecture |
 
 Le document OpenAPI complet, avec schémas, validations, exemples de requête, de succès et d'erreur pour chaque opération, est [openapi.yaml](../../backend/openapi.yaml).
+
+### Fiches, repères et calcul de l'Élève du Mois
+
+Une fiche couvre les cinq jours de cours, du samedi au mercredi inclus. Elle suit les états `brouillon → soumise → validee`; seules les fiches validées contribuent au calcul mensuel. La création utilise `sourate_debut_id`, `verset_debut`, `sourate_fin_id` et `verset_fin`; la fin doit suivre le début et respecter le nombre de versets du référentiel. La saisie quotidienne reçoit les catégories `D` (leçon), `J` (révision récente) et `M` (révision ancienne), chacune avec les identifiants de sourate et les versets de début/fin. Les jeudis et vendredis sont hors des jours de cours.
+
+La note de récitation quotidienne est une valeur entière de 0 à 4 saisie par l'Oustaz. Pour le classement du mois :
+
+- `exemplarite_sur_100` = somme des cinq critères / 20 × 100. Les critères sont assiduité et ponctualité, discipline et comportement, propreté et hygiène, camaraderie et respect, assiduité aux prières et dévotion. Chaque note va de 0 à 4.
+- `objectifs_sur_100` = versets D couverts (intervalles dédupliqués et limités à la cible de la fiche) / versets des objectifs des fiches validées commencées pendant le mois × 100.
+- `recitation_sur_100` = moyenne des notes quotidiennes de récitation / 4 × 100.
+- `score_total` = 50 % exemplarité + 30 % objectifs + 20 % récitation. Le score et le classement restent `null` tant que les trois composantes ne sont pas calculables.
+
+Le planning conserve les séances des cinq jours de cours (samedi à mercredi) et l'appel est saisi pour une date réelle, avec les statuts `present`, `absent`, `retard` ou `excuse`. Une date d'appel doit correspondre au jour du planning; seuls les élèves actifs inscrits dans la classe peuvent être marqués.
+
+La synthèse tuteur est limitée aux enfants rattachés au compte connecté et fournit les évaluations de récitation, les notes de comportement, les fiches et les présences de l'année scolaire courante.
 
 ## 4. Exemples JSON
 

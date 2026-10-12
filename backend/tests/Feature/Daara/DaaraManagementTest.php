@@ -15,6 +15,7 @@ use App\Support\AnneeScolaire;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -217,6 +218,7 @@ class DaaraManagementTest extends TestCase
             'new_password' => 'weak',
             'new_password_confirmation' => 'weak',
         ])->assertUnprocessable()
+            ->assertJsonPath('message', 'Le champ nouveau mot de passe doit contenir au moins 6 caractères.')
             ->assertJsonValidationErrors('new_password');
 
         $this->withToken($token)->postJson('/api/v1/auth/change-password', [
@@ -421,18 +423,51 @@ class DaaraManagementTest extends TestCase
             'verset_debut' => 1,
             'sourate_fin' => 'Al-Baqara',
             'verset_fin' => 5,
+            'statut' => 'validee',
         ]);
         Note::create([
             'fiche_hebdomadaire_id' => $fiche->id,
             'jour' => 'lundi',
             'nouvelle_lecon' => 'Très bien',
         ]);
+        DB::table('evaluations_exemplarite')->insert([
+            'eleve_id' => $eleve->id,
+            'mois' => now()->format('Y-m'),
+            'assiduite_ponctualite' => 4,
+            'discipline_comportement' => 3,
+            'proprete_hygiene' => 4,
+            'camaraderie_respect' => 3,
+            'prieres_devotion' => 4,
+            'evalue_par' => $oustazUser->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('presences')->insert([
+            'planning_id' => DB::table('plannings')->insertGetId([
+                'classe_academique_id' => $classe->id,
+                'jour_semaine' => 'lundi',
+                'date' => '2026-10-05',
+                'heure_debut' => '09:00',
+                'heure_fin' => '11:00',
+                'activite' => 'Cours',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]),
+            'eleve_id' => $eleve->id,
+            'date_cours' => '2026-10-05',
+            'statut' => 'present',
+            'saisi_par' => $oustazUser->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $this->actingAs($user)->getJson('/api/v1/tuteur/enfants/'.$eleve->id.'/synthese')
             ->assertOk()
             ->assertJsonPath('data.eleve.id', $eleve->id)
             ->assertJsonPath('data.progression.tendance', 'non_evalue')
-            ->assertJsonPath('data.activite_hebdomadaire.0.notes.0.nouvelle_lecon', 'Très bien');
+            ->assertJsonPath('data.activite_hebdomadaire.0.notes.0.nouvelle_lecon', 'Très bien')
+            ->assertJsonPath('data.comportement.prieres_devotion', 4)
+            ->assertJsonPath('data.presences.totaux.present', 1);
 
         $otherChild = Eleve::create([
             'matricule' => 'ELV-'.substr(AnneeScolaire::courante(), 0, 4).'-000096',
@@ -443,6 +478,120 @@ class DaaraManagementTest extends TestCase
         $this->getJson('/api/v1/tuteur/enfants/'.$otherChild->id.'/synthese')
             ->assertForbidden()
             ->assertJsonPath('message', 'Cet élève n’est pas rattaché à votre compte.');
+    }
+
+    public function test_fiche_hebdomadaire_repere_et_score_eleve_du_mois(): void
+    {
+        $admin = User::factory()->role(Role::Admin)->create();
+        $oustazUser = User::factory()->role(Role::Oustaz)->create();
+        $oustaz = Oustaz::create(['user_id' => $oustazUser->id]);
+        $classe = $this->createCurrentYearClass();
+        $classe->update(['oustaz_id' => $oustaz->id]);
+        $eleve = Eleve::create([
+            'matricule' => 'ELV-'.substr(AnneeScolaire::courante(), 0, 4).'-000095',
+            'nom' => 'DIOP',
+            'prenom' => 'Mamadou',
+            'sexe' => 'M',
+        ]);
+        Inscription::create([
+            'eleve_id' => $eleve->id,
+            'classe_academique_id' => $classe->id,
+            'annee_scolaire' => AnneeScolaire::courante(),
+            'date_inscription' => '2026-10-01',
+            'statut' => 'active',
+        ]);
+
+        $this->actingAs($oustazUser)->getJson('/api/v1/referentiels/sourates')
+            ->assertOk()->assertJsonCount(114, 'data')
+            ->assertJsonPath('data.0.nom', 'Al-Fatiha');
+
+        $fiche = $this->postJson('/api/v1/fiches-hebdomadaires', [
+            'eleve_id' => $eleve->id,
+            'date_debut' => '2026-10-03',
+            'date_fin' => '2026-10-07',
+            'sourate_debut_id' => 1,
+            'verset_debut' => 1,
+            'sourate_fin_id' => 1,
+            'verset_fin' => 7,
+        ])->assertCreated()->assertJsonPath('data.statut', 'brouillon');
+        $ficheId = $fiche->json('data.id');
+
+        $this->putJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/jours/samedi', [
+            'reperes' => ['D' => ['sourate_debut_id' => 1, 'verset_debut' => 1, 'sourate_fin_id' => 1, 'verset_fin' => 3]],
+            'qualite_recitation' => 4,
+        ])->assertOk();
+        $this->putJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/jours/dimanche', [
+            'reperes' => ['D' => ['sourate_debut_id' => 1, 'verset_debut' => 2, 'sourate_fin_id' => 1, 'verset_fin' => 7]],
+            'qualite_recitation' => 2,
+        ])->assertOk();
+        $this->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/soumettre')
+            ->assertOk()->assertJsonPath('data.statut', 'soumise');
+        $this->actingAs($admin)->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/valider')
+            ->assertOk()->assertJsonPath('data.statut', 'validee');
+
+        $this->actingAs($oustazUser)->postJson('/api/v1/eleves/'.$eleve->id.'/exemplarite', [
+            'mois' => '2026-10',
+            'assiduite_ponctualite' => 4,
+            'discipline_comportement' => 3,
+            'proprete_hygiene' => 2,
+            'camaraderie_respect' => 1,
+            'prieres_devotion' => 0,
+        ])->assertOk()->assertJsonPath('data.score_total', 70);
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/eleve-du-mois?mois=2026-10')
+            ->assertOk()
+            ->assertJsonPath('data.gagnant.eleve.id', $eleve->id)
+            ->assertJsonPath('data.gagnant.objectifs_sur_100', 100)
+            ->assertJsonPath('data.gagnant.recitation_sur_100', 75)
+            ->assertJsonPath('data.gagnant.score_total', 70);
+    }
+
+    public function test_planning_samedi_a_mercredi_et_prise_de_presence_par_seance(): void
+    {
+        $oustazUser = User::factory()->role(Role::Oustaz)->create();
+        $oustaz = Oustaz::create(['user_id' => $oustazUser->id]);
+        $classe = $this->createCurrentYearClass();
+        $classe->update(['oustaz_id' => $oustaz->id]);
+        $eleve = Eleve::create([
+            'matricule' => 'ELV-'.substr(AnneeScolaire::courante(), 0, 4).'-000094',
+            'nom' => 'SARR',
+            'prenom' => 'Awa',
+            'sexe' => 'F',
+        ]);
+        Inscription::create([
+            'eleve_id' => $eleve->id,
+            'classe_academique_id' => $classe->id,
+            'annee_scolaire' => AnneeScolaire::courante(),
+            'date_inscription' => '2026-10-01',
+            'statut' => 'active',
+        ]);
+
+        $planning = $this->actingAs($oustazUser)->postJson('/api/v1/classes/'.$classe->id.'/planning', [
+            'jour' => 'mercredi',
+            'heure_debut' => '09:00',
+            'heure_fin' => '11:00',
+            'activite' => 'Cours de mémorisation',
+        ])->assertCreated()->json('data');
+
+        $this->getJson('/api/v1/classes/'.$classe->id.'/planning')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['semaine' => ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi']]])
+            ->assertJsonMissingPath('data.semaine.jeudi')
+            ->assertJsonMissingPath('data.semaine.vendredi');
+        $this->postJson('/api/v1/classes/'.$classe->id.'/planning', [
+            'jour' => 'jeudi',
+            'heure_debut' => '09:00',
+            'heure_fin' => '11:00',
+            'activite' => 'Jour non travaillé',
+        ])->assertUnprocessable()->assertJsonValidationErrors('jour');
+        $this->putJson('/api/v1/plannings/'.$planning['id'].'/presences', [
+            'date_cours' => '2026-10-07',
+            'presences' => [['eleve_id' => $eleve->id, 'statut' => 'present']],
+        ])->assertOk()->assertJsonPath('data.nombre_eleves', 1);
+        $this->getJson('/api/v1/plannings/'.$planning['id'].'/presences?date_cours=2026-10-07')
+            ->assertOk()
+            ->assertJsonPath('data.eleves.0.eleve_id', $eleve->id)
+            ->assertJsonPath('data.eleves.0.statut', 'present');
     }
 
     private function createCurrentYearClass(): ClasseAcademique

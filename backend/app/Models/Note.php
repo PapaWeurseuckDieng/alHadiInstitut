@@ -17,12 +17,38 @@ class Note extends Model
         'nouvelle_lecon',
         'revision_partielle',
         'revision_generale',
+        'd_sourate_debut',
+        'd_verset_debut',
+        'd_sourate_fin',
+        'd_verset_fin',
+        'j_sourate_debut',
+        'j_verset_debut',
+        'j_sourate_fin',
+        'j_verset_fin',
+        'm_sourate_debut',
+        'm_verset_debut',
+        'm_sourate_fin',
+        'm_verset_fin',
+        'qualite_recitation',
     ];
 
     protected function casts(): array
     {
         return [
             'jour' => Jour::class,
+            'd_sourate_debut' => 'integer',
+            'd_verset_debut' => 'integer',
+            'd_sourate_fin' => 'integer',
+            'd_verset_fin' => 'integer',
+            'j_sourate_debut' => 'integer',
+            'j_verset_debut' => 'integer',
+            'j_sourate_fin' => 'integer',
+            'j_verset_fin' => 'integer',
+            'm_sourate_debut' => 'integer',
+            'm_verset_debut' => 'integer',
+            'm_sourate_fin' => 'integer',
+            'm_verset_fin' => 'integer',
+            'qualite_recitation' => 'integer',
         ];
     }
 
