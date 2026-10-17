@@ -9,6 +9,7 @@ use App\Models\AuditEvent;
 use App\Models\Oustaz;
 use App\Models\Tuteur;
 use App\Models\User;
+use App\Services\PhotoProfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -54,7 +55,11 @@ class AdminUserController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * POST /v1/admin/users : crée un compte Admin, Tuteur ou Oustaz (mot de passe temporaire « passer »).
+     * JSON, ou multipart/form-data avec une photo facultative (champ « photo »).
+     */
+    public function store(Request $request, PhotoProfil $photos): JsonResponse
     {
         if (is_string($request->input('telephone'))) {
             $request->merge(['telephone' => User::normaliserTelephone($request->input('telephone'))]);
@@ -70,9 +75,30 @@ class AdminUserController extends Controller
             'role' => ['required', Rule::in([Role::Admin->value, Role::Tuteur->value, Role::Oustaz->value])],
             'profession' => ['nullable', 'string', 'max:120'],
             'specialite' => ['nullable', 'string', 'max:120'],
-        ]);
+            'photo' => ['sometimes', 'nullable', ...PhotoProfil::REGLES],
+        ], PhotoProfil::messages());
 
-        $user = DB::transaction(function () use ($data, $request): User {
+        // Photo enregistrée avant la transaction, supprimée si la création échoue
+        $photoPath = $request->hasFile('photo') ? $photos->enregistrer($request->file('photo'), 'comptes') : null;
+        try {
+            $user = $this->createUser($data, $request, $photoPath);
+        } catch (\Throwable $exception) {
+            $photos->supprimer($photoPath);
+            throw $exception;
+        }
+        $user->load(['tuteur', 'oustaz']);
+        $userData = (new UserResource($user))->resolve($request);
+        $userData['profil_id'] = $user->tuteur?->id ?? $user->oustaz?->id;
+
+        return response()->json([
+            'message' => 'Compte créé.',
+            'data' => $userData,
+        ], 201);
+    }
+
+    private function createUser(array $data, Request $request, ?string $photoPath): User
+    {
+        return DB::transaction(function () use ($data, $request, $photoPath): User {
             $user = User::create([
                 'matricule' => 'USR-'.Str::upper(Str::random(12)),
                 'nom' => $data['nom'],
@@ -85,6 +111,7 @@ class AdminUserController extends Controller
                 'must_change_password' => true,
                 'role' => $data['role'],
                 'statut' => 'actif',
+                'photo' => $photoPath,
             ]);
 
             if ($user->role === Role::Tuteur) {
@@ -110,14 +137,81 @@ class AdminUserController extends Controller
 
             return $user;
         });
-        $user->load(['tuteur', 'oustaz']);
-        $userData = (new UserResource($user))->resolve($request);
-        $userData['profil_id'] = $user->tuteur?->id ?? $user->oustaz?->id;
+    }
+
+    /**
+     * POST /v1/admin/users/{userId}/photo : ajoute ou remplace la photo du compte (multipart, champ « photo »).
+     */
+    public function updatePhoto(Request $request, int $userId, PhotoProfil $photos): JsonResponse
+    {
+        $user = User::where('is_archived', false)->findOrFail($userId);
+        $request->validate(['photo' => ['required', ...PhotoProfil::REGLES]], [
+            ...PhotoProfil::messages(),
+            'photo.required' => 'Choisissez une photo.',
+        ]);
+
+        $ancienne = $user->photo;
+        $user->forceFill(['photo' => $photos->enregistrer($request->file('photo'), 'comptes')])->save();
+        $photos->supprimer($ancienne);
+
+        AuditEvent::create([
+            'actor_user_id' => $request->user()->id,
+            'action' => 'user.photo_updated',
+            'entity_type' => 'user',
+            'entity_id' => $user->id,
+            'metadata' => [],
+            'created_at' => now(),
+        ]);
 
         return response()->json([
-            'message' => 'Compte créé.',
-            'data' => $userData,
-        ], 201);
+            'message' => 'Photo enregistrée.',
+            'data' => ['id' => $user->id, 'photo' => PhotoProfil::url($user->photo)],
+        ]);
+    }
+
+    /**
+     * POST /v1/admin/users/{userId}/reset-password : remet le mot de passe temporaire « passer »
+     * (oubli du mot de passe). Le titulaire est déconnecté partout et devra le changer
+     * à sa prochaine connexion.
+     */
+    public function resetPassword(Request $request, int $userId): JsonResponse
+    {
+        $user = User::findOrFail($userId);
+        if ($user->id === $request->user()->id) {
+            throw ValidationException::withMessages([
+                'user' => ['Vous ne pouvez pas réinitialiser votre propre mot de passe.'],
+            ]);
+        }
+        if ($user->is_archived) {
+            throw ValidationException::withMessages([
+                'user' => ['Ce compte est archivé : son mot de passe ne peut pas être réinitialisé.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($user, $request): void {
+            $user->forceFill([
+                'password' => 'passer',
+                'must_change_password' => true,
+            ])->save();
+            $user->tokens()->delete();
+
+            AuditEvent::create([
+                'actor_user_id' => $request->user()->id,
+                'action' => 'user.password_reset',
+                'entity_type' => 'user',
+                'entity_id' => $user->id,
+                'metadata' => [],
+                'created_at' => now(),
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Mot de passe réinitialisé. L’utilisateur se connectera avec le mot de passe temporaire et devra le changer.',
+            'data' => [
+                'id' => $user->id,
+                'must_change_password' => true,
+            ],
+        ]);
     }
 
     public function show(Request $request, int $userId): JsonResponse
@@ -254,5 +348,58 @@ class AdminUserController extends Controller
                 'archived_at' => $user->archived_at?->toIso8601String(),
             ],
         ]);
+    }
+
+    /**
+     * GET /v1/admin/tuteurs?q= : recherche d'un tuteur actif par prénom, nom ou téléphone (20 résultats),
+     * pour le rattacher à un élève. Les homonymes sont signalés : le téléphone et les enfants les distinguent.
+     * exclure_eleve_id : écarte les tuteurs déjà rattachés à cet élève.
+     */
+    public function tuteurs(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'exclure_eleve_id' => ['nullable', 'integer'],
+        ]);
+        $mots = preg_split('/\s+/', trim($data['q'] ?? ''), -1, PREG_SPLIT_NO_EMPTY);
+        $actifs = fn ($users) => $users->where('role', 'tuteur')->where('statut', 'actif')->where('is_archived', false);
+
+        $users = User::query()
+            ->tap($actifs)
+            ->whereHas('tuteur', fn ($tuteurs) => $tuteurs->when(
+                $data['exclure_eleve_id'] ?? null,
+                fn ($query, $eleveId) => $query->whereDoesntHave('eleves', fn ($eleves) => $eleves->where('eleves.id', $eleveId)),
+            ))
+            ->where(function ($query) use ($mots) {
+                // Chaque mot doit se retrouver dans le prénom, le nom ou le numéro
+                foreach ($mots as $mot) {
+                    $like = '%'.addcslashes($mot, '%_\\').'%';
+                    $chiffres = preg_replace('/\D/', '', $mot);
+                    $query->where(fn ($champ) => $champ->where('prenom', 'like', $like)->orWhere('nom', 'like', $like)
+                        ->when(strlen($chiffres) >= 3, fn ($tel) => $tel->orWhere('telephone', 'like', '%'.$chiffres.'%')));
+                }
+            })
+            ->with(['tuteur.eleves' => fn ($eleves) => $eleves->where('eleves.is_archived', false)])
+            ->orderBy('prenom')->orderBy('nom')
+            ->limit(20)
+            ->get();
+
+        // Homonymes : même prénom et même nom (insensible à la casse) parmi tous les tuteurs actifs
+        $cle = fn ($prenom, $nom) => mb_strtolower(trim($prenom).'|'.trim($nom));
+        $memesNoms = $users->isEmpty() ? collect() : User::query()->tap($actifs)
+            ->where(fn ($query) => $users->each(fn (User $user) => $query->orWhere(fn ($meme) => $meme->where('prenom', $user->prenom)->where('nom', $user->nom))))
+            ->get(['prenom', 'nom'])
+            ->countBy(fn (User $user) => $cle($user->prenom, $user->nom));
+
+        return response()->json(['data' => $users->map(fn (User $user) => [
+            'id' => $user->tuteur->id,
+            'user_id' => $user->id,
+            'prenom' => $user->prenom,
+            'nom' => $user->nom,
+            'telephone' => $user->telephone,
+            'photo' => PhotoProfil::url($user->photo),
+            'enfants' => $user->tuteur->eleves->map(fn ($eleve) => trim($eleve->prenom.' '.$eleve->nom))->values(),
+            'homonyme' => ($memesNoms[$cle($user->prenom, $user->nom)] ?? 0) > 1,
+        ])->values()]);
     }
 }

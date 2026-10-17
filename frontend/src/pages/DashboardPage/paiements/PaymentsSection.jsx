@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import ActionMenu from '../../../components/ActionMenu/ActionMenu'
+import Avatar from '../../../components/Avatar'
+import { useDialogs } from '../../../components/Dialogs/dialogsContext'
 import Icon from '../../../components/Icon'
 import { useI18n } from '../../../i18n/useI18n'
 import { envoyerRappels, getPaiements } from '../../../services/paiementsService'
 import PaymentForm from './PaymentForm'
+import RappelsJournal from './RappelsJournal'
 import TarifsForm from './TarifsForm'
 import { usePaymentFormat } from './usePaymentFormat'
 import './Paiements.css'
@@ -20,6 +24,7 @@ const STATUS_TABS = ['', 'impaye', 'partiel', 'paye']
  */
 export default function PaymentsSection({ refreshKey, onNotice, onSessionExpired }) {
   const { t, formatDate, serverMessage } = useI18n()
+  const { confirm } = useDialogs()
   const { amount, monthLabel } = usePaymentFormat()
 
   // Filtres (mois vide = mois par défaut choisi par le serveur)
@@ -37,6 +42,7 @@ export default function PaymentsSection({ refreshKey, onNotice, onSessionExpired
   // Fenêtres ouvertes : encaissement d'une ligne, tarifs
   const [paying, setPaying] = useState(null)
   const [tarifsOpen, setTarifsOpen] = useState(false)
+  const [journalOpen, setJournalOpen] = useState(false)
   const [sending, setSending] = useState(false)
 
   // Chargement de la situation du mois à chaque changement de filtre
@@ -71,7 +77,13 @@ export default function PaymentsSection({ refreshKey, onNotice, onSessionExpired
 
   /** Envoi manuel des rappels WhatsApp du mois, après confirmation. */
   async function sendReminders() {
-    if (!window.confirm(t('pay.reminders.confirm', { month: monthLabel(data.mois) }))) return
+    const ok = await confirm({
+      title: t('pay.reminders.confirmTitle', { month: monthLabel(data.mois) }),
+      message: t('pay.reminders.confirm', { month: monthLabel(data.mois) }),
+      confirmLabel: t('pay.reminders.sendNow'),
+      tone: 'warning',
+    })
+    if (!ok) return
     setSending(true)
     try {
       const response = await envoyerRappels(data.mois)
@@ -170,6 +182,9 @@ export default function PaymentsSection({ refreshKey, onNotice, onSessionExpired
               {rappels.echecs > 0 && <span className="pay-error-text"> {t('pay.reminders.failures', { count: rappels.echecs })}</span>}
             </p>
             {rappels.pilote === 'log' && <p className="pay-reminders-help">{t('pay.reminders.simulationHelp')}</p>}
+            <button type="button" className="db-button db-button--secondary db-button--small pay-journal-open" onClick={() => setJournalOpen(true)}>
+              <Icon name="receipt" size={15} />{t('pay.journal.open')}
+            </button>
           </div>
         </section>
       )}
@@ -253,6 +268,7 @@ export default function PaymentsSection({ refreshKey, onNotice, onSessionExpired
           onSessionExpired={onSessionExpired}
         />
       )}
+      {journalOpen && <RappelsJournal mois={data.mois} onClose={() => setJournalOpen(false)} onSessionExpired={onSessionExpired} />}
       {tarifsOpen && (
         <TarifsForm
           onClose={() => setTarifsOpen(false)}
@@ -289,7 +305,7 @@ function PaymentsTable({ items, onCollect, lastReminderText }) {
           <tr key={item.eleve.id}>
             <td data-label={t('pay.table.student')}>
               <div className="db-person">
-                <span className="db-avatar" aria-hidden="true">{`${item.eleve.prenom[0] ?? ''}${item.eleve.nom[0] ?? ''}`.toUpperCase()}</span>
+                <Avatar person={item.eleve} />
                 <span>
                   <strong>{item.eleve.prenom} {item.eleve.nom}</strong>
                   <small><bdi>{item.eleve.matricule}</bdi></small>
@@ -325,18 +341,14 @@ function PaymentsTable({ items, onCollect, lastReminderText }) {
                     <Icon name="wallet" size={16} />{t('pay.collect')}
                   </button>
                 )}
-                {/* Rappel manuel : ouvre WhatsApp avec le message pré-rempli pour le parent */}
-                {item.whatsapp && (
-                  <a
-                    className="db-button db-button--secondary pay-whatsapp"
-                    href={`https://wa.me/${item.whatsapp.numero}?text=${encodeURIComponent(item.whatsapp.message)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('pay.reminders.manualTitle')}
-                  >
-                    <Icon name="chat" size={16} />{t('pay.reminders.manual')}
-                  </a>
-                )}
+                {/* Autres actions : rappel WhatsApp manuel (message pré-rempli pour le parent), reçus */}
+                <ActionMenu
+                  label={t('actions.for', { name: `${item.eleve.prenom} ${item.eleve.nom}` })}
+                  items={[
+                    { key: 'whatsapp', label: t('pay.reminders.manualTitle'), icon: 'chat', hidden: !item.whatsapp, onSelect: () => window.open(`https://wa.me/${item.whatsapp.numero}?text=${encodeURIComponent(item.whatsapp.message)}`, '_blank', 'noopener') },
+                    ...item.paiements.map(paiement => ({ key: `recu-${paiement.id}`, label: t('pay.table.receipt', { numero: paiement.numero_recu }), icon: 'printer', onSelect: () => window.open(`/recus/${paiement.id}`, '_blank', 'noopener') })),
+                  ]}
+                />
               </div>
               )}
             </td>

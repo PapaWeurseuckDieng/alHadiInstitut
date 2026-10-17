@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
+use App\Models\AuditEvent;
+use App\Models\ClasseAcademique;
 use App\Models\Eleve;
 use App\Models\FicheHebdomadaire;
 use App\Models\Note;
 use App\Models\Sourate;
+use App\Models\User;
+use App\Services\PhotoProfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -15,9 +19,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Suivi coranique : fiches hebdomadaires (créées, remplies et validées par l'oustaz ; l'administration
+ * consulte et peut rouvrir une fiche validée), exemplarité mensuelle et Élève du mois.
+ */
 class SuiviCoraniqueController extends Controller
 {
+    /** Positions des sourates dans le Coran (chargées une fois par requête). */
+    private ?array $referentiel = null;
+
     private const JOURS = ['samedi', 'dimanche', 'lundi', 'mardi', 'mercredi'];
+
+    /** Les cinq critères mensuels d'exemplarité, notés de 0 à 4. */
+    private const CRITERES = ['assiduite_ponctualite', 'discipline_comportement', 'proprete_hygiene', 'camaraderie_respect', 'prieres_devotion'];
 
     public function sourates(): JsonResponse
     {
@@ -28,17 +42,24 @@ class SuiviCoraniqueController extends Controller
     {
         $filters = $request->validate([
             'eleve_id' => ['sometimes', 'integer', 'exists:eleves,id'],
-            'statut' => ['sometimes', Rule::in(['brouillon', 'soumise', 'validee'])],
+            'classe_id' => ['sometimes', 'integer'],
+            'statut' => ['sometimes', Rule::in(['brouillon', 'validee'])],
             'date_debut' => ['sometimes', 'date_format:Y-m-d'],
             'date_fin' => ['sometimes', 'date_format:Y-m-d'],
+            // Fiches validées dont l'oustaz demande la réouverture (à traiter par l'administration)
+            'demande_modification' => ['sometimes', 'boolean'],
         ]);
 
-        $fiches = FicheHebdomadaire::with(['eleve', 'notes'])
+        $fiches = FicheHebdomadaire::with(['eleve', 'notes', 'enseignant', 'validateur', 'autorisateur'])
             ->when(isset($filters['eleve_id']), fn ($query) => $query->where('eleve_id', $filters['eleve_id']))
+            ->when(isset($filters['classe_id']), fn ($query) => $query->whereIn('eleve_id', $this->elevesDeClasses([(int) $filters['classe_id']])))
             ->when(isset($filters['statut']), fn ($query) => $query->where('statut', $filters['statut']))
             ->when(isset($filters['date_debut']), fn ($query) => $query->whereDate('date_debut', '>=', $filters['date_debut']))
             ->when(isset($filters['date_fin']), fn ($query) => $query->whereDate('date_fin', '<=', $filters['date_fin']))
-            ->when($request->user()->role === Role::Oustaz, fn ($query) => $query->where('enseignant_id', $request->user()->id))
+            ->when($request->boolean('demande_modification'), fn ($query) => $query->where('statut', 'validee')->whereNotNull('modification_demandee_at'))
+            ->when($request->user()->role === Role::Oustaz, fn ($query) => $query->where(fn ($siennes) => $siennes
+                ->where('enseignant_id', $request->user()->id)
+                ->orWhereIn('eleve_id', $this->elevesDeClasses($this->classesDeLOustaz($request->user())))))
             ->orderByDesc('date_debut')
             ->get();
 
@@ -72,24 +93,15 @@ class SuiviCoraniqueController extends Controller
         );
 
         $student = Eleve::where('is_archived', false)->findOrFail($data['eleve_id']);
-        if ($request->user()->role === Role::Oustaz) {
-            $hasClass = DB::table('inscriptions')
-                ->join('classes_academiques', 'classes_academiques.id', '=', 'inscriptions.classe_academique_id')
-                ->where('inscriptions.eleve_id', $student->id)
-                ->where('inscriptions.statut', 'active')
-                ->where('inscriptions.is_archived', false)
-                ->where('classes_academiques.oustaz_id', $request->user()->oustaz?->id)
-                ->exists();
-            if (! $hasClass) {
-                return response()->json(['message' => 'Cet élève ne fait pas partie de vos classes.'], 403);
-            }
+        if (! $this->elevesDeClasses($this->classesDeLOustaz($request->user()))->contains($student->id)) {
+            return response()->json(['message' => 'Cet élève ne fait pas partie de vos classes.'], 403);
         }
 
         $start = Sourate::findOrFail($data['sourate_debut_id']);
         $end = Sourate::findOrFail($data['sourate_fin_id']);
         $fiche = FicheHebdomadaire::create([
             'eleve_id' => $student->id,
-            'enseignant_id' => $request->user()->role === Role::Oustaz ? $request->user()->id : null,
+            'enseignant_id' => $request->user()->id,
             'date_debut' => $data['date_debut'],
             'date_fin' => $data['date_fin'],
             'sourate_debut' => $start->nom,
@@ -101,7 +113,7 @@ class SuiviCoraniqueController extends Controller
 
         return response()->json([
             'message' => 'Fiche hebdomadaire créée en brouillon.',
-            'data' => $this->ficheData($fiche->load(['eleve', 'notes'])),
+            'data' => $this->ficheData($fiche->load(['eleve', 'notes', 'enseignant'])),
         ], 201);
     }
 
@@ -109,7 +121,7 @@ class SuiviCoraniqueController extends Controller
     {
         $fiche = $this->findAccessibleFiche($request, $ficheId);
 
-        return response()->json(['data' => $this->ficheData($fiche->load(['eleve', 'notes']))]);
+        return response()->json(['data' => $this->ficheData($fiche->load(['eleve', 'notes', 'enseignant', 'validateur', 'autorisateur']))]);
     }
 
     public function update(Request $request, int $ficheId): JsonResponse
@@ -208,24 +220,74 @@ class SuiviCoraniqueController extends Controller
         ]);
     }
 
-    public function submit(Request $request, int $ficheId): JsonResponse
+    /**
+     * POST /v1/fiches-hebdomadaires/{ficheId}/valider (Oustaz) : la fiche remplie est validée et figée.
+     * Elle compte alors dans les objectifs de l'Élève du mois.
+     */
+    public function validateFiche(Request $request, int $ficheId): JsonResponse
     {
         $fiche = $this->findAccessibleFiche($request, $ficheId);
         $this->requireDraft($fiche);
-        $fiche->update(['statut' => 'soumise']);
+        if ($fiche->notes->isEmpty()) {
+            throw ValidationException::withMessages(['statut' => ['Enregistrez au moins un jour avant de valider la fiche.']]);
+        }
+        $fiche->update([
+            'statut' => 'validee',
+            'valide_par' => $request->user()->id,
+            'valide_at' => now(),
+            'modification_demandee_at' => null,
+            'motif_demande_modification' => null,
+        ]);
+        $this->auditFiche($request, $fiche, 'fiche.validee', []);
 
-        return response()->json(['message' => 'Fiche soumise pour validation.', 'data' => ['id' => $fiche->id, 'statut' => $fiche->statut]]);
+        return response()->json(['message' => 'Fiche hebdomadaire validée.', 'data' => $this->ficheData($fiche->load(['eleve', 'enseignant', 'validateur', 'autorisateur']))]);
     }
 
-    public function validateFiche(Request $request, int $ficheId): JsonResponse
+    /**
+     * POST /v1/fiches-hebdomadaires/{ficheId}/demander-modification (Oustaz) : demande à l'administration
+     * de rouvrir une fiche validée (motif facultatif).
+     */
+    public function requestChange(Request $request, int $ficheId): JsonResponse
+    {
+        $data = $request->validate(['motif' => ['sometimes', 'nullable', 'string', 'max:255']]);
+        $fiche = $this->findAccessibleFiche($request, $ficheId);
+        if ($fiche->statut !== 'validee') {
+            throw ValidationException::withMessages(['statut' => ['Seule une fiche validée peut faire l’objet d’une demande de modification.']]);
+        }
+        if ($fiche->modification_demandee_at) {
+            throw ValidationException::withMessages(['statut' => ['Une demande de modification est déjà en attente pour cette fiche.']]);
+        }
+        $fiche->update(['modification_demandee_at' => now(), 'motif_demande_modification' => $data['motif'] ?? null]);
+        $this->auditFiche($request, $fiche, 'fiche.modification_demandee', ['motif' => $data['motif'] ?? null]);
+
+        return response()->json([
+            'message' => 'Demande de modification envoyée à l’administration.',
+            'data' => $this->ficheData($fiche->load(['eleve', 'enseignant', 'validateur', 'autorisateur'])),
+        ]);
+    }
+
+    /**
+     * POST /v1/fiches-hebdomadaires/{ficheId}/autoriser-modification (Admin) : rouvre une fiche validée ;
+     * elle repasse en brouillon et l'oustaz peut la corriger puis la valider de nouveau.
+     */
+    public function allowChange(Request $request, int $ficheId): JsonResponse
     {
         $fiche = FicheHebdomadaire::findOrFail($ficheId);
-        if ($fiche->statut !== 'soumise') {
-            throw ValidationException::withMessages(['statut' => ['Seule une fiche soumise peut être validée.']]);
+        if ($fiche->statut !== 'validee') {
+            throw ValidationException::withMessages(['statut' => ['Seule une fiche validée peut être rouverte.']]);
         }
-        $fiche->update(['statut' => 'validee']);
+        $fiche->update([
+            'statut' => 'brouillon',
+            'modification_autorisee_par' => $request->user()->id,
+            'modification_autorisee_at' => now(),
+            'modification_demandee_at' => null,
+        ]);
+        $this->auditFiche($request, $fiche, 'fiche.modification_autorisee', ['motif_demande' => $fiche->motif_demande_modification]);
 
-        return response()->json(['message' => 'Fiche hebdomadaire validée.', 'data' => ['id' => $fiche->id, 'statut' => $fiche->statut]]);
+        return response()->json([
+            'message' => 'Modification autorisée : l’oustaz peut de nouveau modifier cette fiche.',
+            'data' => $this->ficheData($fiche->load(['eleve', 'enseignant', 'validateur', 'autorisateur'])),
+        ]);
     }
 
     public function evaluateExemplarite(Request $request, int $eleveId): JsonResponse
@@ -264,38 +326,187 @@ class SuiviCoraniqueController extends Controller
         ]);
     }
 
+    /**
+     * GET /v1/classes/{classeId}/exemplarite?mois=AAAA-MM : élèves actifs de la classe, avec
+     * l'évaluation d'exemplarité déjà saisie pour le mois (ou null) et leur score du mois.
+     */
+    public function classExemplarite(Request $request, int $classeId): JsonResponse
+    {
+        $data = $request->validate(['mois' => ['sometimes', 'date_format:Y-m']], [
+            'mois.date_format' => 'Le mois doit être au format AAAA-MM.',
+        ]);
+        $month = $data['mois'] ?? now(config('app.timezone'))->format('Y-m');
+        $classe = ClasseAcademique::where('is_archived', false)->findOrFail($classeId);
+        if ($request->user()->role === Role::Oustaz && $classe->oustaz_id !== $request->user()->oustaz?->id) {
+            return response()->json(['message' => 'Cette classe ne vous est pas affectée.'], 403);
+        }
+
+        $students = Eleve::where('is_archived', false)
+            ->whereHas('inscriptions', fn ($query) => $query
+                ->where('classe_academique_id', $classe->id)
+                ->where('statut', 'active')
+                ->where('is_archived', false))
+            ->orderBy('nom')
+            ->orderBy('prenom')
+            ->get();
+        $evaluations = DB::table('evaluations_exemplarite')
+            ->whereIn('eleve_id', $students->pluck('id'))
+            ->where('mois', $month)
+            ->get()
+            ->keyBy('eleve_id');
+
+        return response()->json(['data' => [
+            'classe_id' => $classe->id,
+            'mois' => $month,
+            'criteres' => self::CRITERES,
+            'eleves' => $students->map(function (Eleve $student) use ($evaluations, $month) {
+                $evaluation = $evaluations->get($student->id);
+
+                return [
+                    'eleve_id' => $student->id,
+                    'matricule' => $student->matricule,
+                    'nom' => $student->nom,
+                    'prenom' => $student->prenom,
+                    'photo' => PhotoProfil::url($student->photo),
+                    'evaluation' => $evaluation
+                        ? collect(self::CRITERES)->mapWithKeys(fn (string $critere) => [$critere => (int) $evaluation->{$critere}])->all()
+                        : null,
+                    'score' => $this->scoreData($student->id, $month),
+                ];
+            })->values(),
+        ]]);
+    }
+
     public function eleveDuMois(Request $request): JsonResponse
     {
-        $data = $request->validate(['mois' => ['sometimes', 'date_format:Y-m']]);
+        $data = $request->validate(['mois' => ['sometimes', 'date_format:Y-m']], [
+            'mois.date_format' => 'Le mois doit être au format AAAA-MM.',
+        ]);
         $month = $data['mois'] ?? now()->format('Y-m');
-        $evaluations = DB::table('evaluations_exemplarite')
-            ->join('eleves', 'eleves.id', '=', 'evaluations_exemplarite.eleve_id')
-            ->where('evaluations_exemplarite.mois', $month)
-            ->where('eleves.is_archived', false)
-            ->get(['eleves.id', 'eleves.nom', 'eleves.prenom']);
-        $scores = $evaluations->map(fn ($student) => $this->scoreData($student->id, $month) + [
-            'eleve' => ['id' => $student->id, 'nom' => $student->nom, 'prenom' => $student->prenom],
-        ])->filter(fn ($score) => $score['score_total'] !== null)
+        $students = Eleve::where('is_archived', false)
+            ->whereIn('id', DB::table('evaluations_exemplarite')->where('mois', $month)->select('eleve_id'))
+            ->with(['inscriptions' => fn ($query) => $query->where('statut', 'active')->where('is_archived', false)->with('classeAcademique')->orderByDesc('id')])
+            ->get();
+        $scores = $students->map(fn (Eleve $student) => $this->scoreData($student->id, $month) + [
+            'eleve' => [
+                'id' => $student->id,
+                'matricule' => $student->matricule,
+                'nom' => $student->nom,
+                'prenom' => $student->prenom,
+                'photo' => PhotoProfil::url($student->photo),
+                'classe' => $student->inscriptions->first()?->classeAcademique?->nom,
+                'classe_id' => $student->inscriptions->first()?->classeAcademique?->id,
+            ],
+        ]);
+        $ranking = $scores->filter(fn ($score) => $score['score_total'] !== null)
             ->sortByDesc('score_total')
+            ->values()
+            ->map(fn (array $score, int $index) => ['rang' => $index + 1] + $score);
+        // Évalués mais pas encore classables : composantes manquantes (fiche validée, notes de récitation)
+        $unranked = $scores->filter(fn ($score) => $score['score_total'] === null)
+            ->map(fn (array $score) => $score + ['manque' => array_values(array_filter([
+                $score['objectifs_sur_100'] === null ? 'objectifs' : null,
+                $score['recitation_sur_100'] === null ? 'recitation' : null,
+            ]))])
+            ->sortBy(fn (array $score) => $score['eleve']['nom'].' '.$score['eleve']['prenom'])
             ->values();
+
+        $classes = $this->classementParClasse($ranking, $scores);
 
         return response()->json([
             'data' => [
                 'mois' => $month,
-                'gagnant' => $scores->first(),
-                'classement' => $scores,
+                // Meilleur des meilleurs : premier du classement général (donc le meilleur des premiers de classe)
+                'gagnant' => $ranking->first(),
+                'classement' => $ranking,
+                'non_classes' => $unranked,
+                // Par classe : moyennes, premier de la classe et classement interne ; triées par moyenne
+                'classes' => $classes,
+                // Classe exemplaire : meilleure moyenne des scores (départage : exemplarité, puis nombre de classés)
+                'classe_exemplaire' => $classes->first(fn (array $classe) => $classe['moyenne_score'] !== null),
             ],
         ]);
     }
 
+    /** Regroupe le classement par classe et calcule les moyennes de chaque classe. */
+    private function classementParClasse($ranking, $scores)
+    {
+        $moyenne = fn ($lignes, string $cle) => ($valeurs = $lignes->pluck($cle)->filter(fn ($valeur) => $valeur !== null))->isEmpty()
+            ? null
+            : round($valeurs->avg(), 2);
+        $classes = ClasseAcademique::with('oustaz.user')
+            ->whereIn('id', $scores->pluck('eleve.classe_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        return $scores->groupBy(fn (array $score) => $score['eleve']['classe_id'] ?? 0)
+            ->map(function ($evalues, $classeId) use ($ranking, $classes, $moyenne) {
+                $classe = $classes->get($classeId);
+                $rangs = $ranking->filter(fn (array $ligne) => ($ligne['eleve']['classe_id'] ?? 0) === $classeId)->values()
+                    ->map(fn (array $ligne, int $index) => ['rang_classe' => $index + 1] + $ligne);
+
+                return [
+                    'classe' => $classe ? [
+                        'id' => $classe->id,
+                        'nom' => $classe->nom,
+                        'niveau' => $classe->niveau,
+                        'annee_scolaire' => $classe->annee_scolaire,
+                        'oustaz' => $classe->oustaz?->user ? trim($classe->oustaz->user->prenom.' '.$classe->oustaz->user->nom) : null,
+                        'oustaz_id' => $classe->oustaz_id,
+                    ] : null,
+                    'evalues' => $evalues->count(),
+                    'classes' => $rangs->count(),
+                    'moyenne_score' => $moyenne($rangs, 'score_total'),
+                    'moyenne_exemplarite' => $moyenne($evalues, 'exemplarite_sur_100'),
+                    'moyenne_objectifs' => $moyenne($evalues, 'objectifs_sur_100'),
+                    'moyenne_recitation' => $moyenne($evalues, 'recitation_sur_100'),
+                    'meilleur' => $rangs->first(),
+                    'classement' => $rangs,
+                ];
+            })
+            ->sort(fn (array $a, array $b) => [$b['moyenne_score'] !== null, $b['moyenne_score'], $b['moyenne_exemplarite'], $b['classes']]
+                <=> [$a['moyenne_score'] !== null, $a['moyenne_score'], $a['moyenne_exemplarite'], $a['classes']])
+            ->values()
+            ->map(fn (array $classe, int $index) => ['rang' => $classe['moyenne_score'] !== null ? $index + 1 : null] + $classe);
+    }
+
+    /** Fiche accessible : toutes pour l'administration ; pour l'oustaz, les siennes et celles des élèves de ses classes. */
     private function findAccessibleFiche(Request $request, int $ficheId): FicheHebdomadaire
     {
         $fiche = FicheHebdomadaire::with('notes')->findOrFail($ficheId);
-        if ($request->user()->role === Role::Oustaz && $fiche->enseignant_id !== $request->user()->id) {
+        if (
+            $request->user()->role === Role::Oustaz
+            && $fiche->enseignant_id !== $request->user()->id
+            && ! $this->elevesDeClasses($this->classesDeLOustaz($request->user()))->contains($fiche->eleve_id)
+        ) {
             abort(403, 'Cette fiche ne vous est pas affectée.');
         }
 
         return $fiche;
+    }
+
+    /** Classes actives de l'oustaz connecté. */
+    private function classesDeLOustaz(User $user): array
+    {
+        return ClasseAcademique::where('oustaz_id', $user->oustaz?->id ?? 0)->where('is_archived', false)->pluck('id')->all();
+    }
+
+    /** Élèves inscrits (inscription active) dans ces classes. */
+    private function elevesDeClasses(array $classeIds)
+    {
+        return DB::table('inscriptions')->whereIn('classe_academique_id', $classeIds)
+            ->where('statut', 'active')->where('is_archived', false)->pluck('eleve_id');
+    }
+
+    private function auditFiche(Request $request, FicheHebdomadaire $fiche, string $action, array $metadata): void
+    {
+        AuditEvent::create([
+            'actor_user_id' => $request->user()->id,
+            'action' => $action,
+            'entity_type' => 'fiche_hebdomadaire',
+            'entity_id' => $fiche->id,
+            'metadata' => ['eleve_id' => $fiche->eleve_id, ...$metadata],
+            'created_at' => now(),
+        ]);
     }
 
     private function authorizeStudentForOustaz(Request $request, Eleve $student): void
@@ -316,7 +527,7 @@ class SuiviCoraniqueController extends Controller
     private function requireDraft(FicheHebdomadaire $fiche): void
     {
         if ($fiche->statut !== 'brouillon') {
-            throw ValidationException::withMessages(['statut' => ['Seule une fiche en brouillon peut être modifiée ou soumise.']]);
+            throw ValidationException::withMessages(['statut' => ['Fiche validée : seule l’administration peut autoriser sa modification.']]);
         }
     }
 
@@ -350,11 +561,25 @@ class SuiviCoraniqueController extends Controller
         $start = Sourate::where('nom', $fiche->sourate_debut)->first();
         $end = Sourate::where('nom', $fiche->sourate_fin)->first();
 
+        $nom = fn (?User $user) => $user ? trim($user->prenom.' '.$user->nom) : null;
+
         return [
             'id' => $fiche->id,
             'eleve_id' => $fiche->eleve_id,
-            'eleve' => $fiche->eleve ? ['nom' => $fiche->eleve->nom, 'prenom' => $fiche->eleve->prenom] : null,
+            'eleve' => $fiche->eleve ? [
+                'nom' => $fiche->eleve->nom,
+                'prenom' => $fiche->eleve->prenom,
+                'matricule' => $fiche->eleve->matricule,
+                'photo' => PhotoProfil::url($fiche->eleve->photo),
+            ] : null,
             'enseignant_id' => $fiche->enseignant_id,
+            'enseignant' => $fiche->relationLoaded('enseignant') ? $nom($fiche->enseignant) : null,
+            'valide_at' => $fiche->valide_at?->toIso8601String(),
+            'valide_par' => $fiche->relationLoaded('validateur') ? $nom($fiche->validateur) : null,
+            'modification_demandee_at' => $fiche->modification_demandee_at?->toIso8601String(),
+            'motif_demande_modification' => $fiche->motif_demande_modification,
+            'modification_autorisee_at' => $fiche->modification_autorisee_at?->toIso8601String(),
+            'modification_autorisee_par' => $fiche->relationLoaded('autorisateur') ? $nom($fiche->autorisateur) : null,
             'date_debut' => $fiche->date_debut->toDateString(),
             'date_fin' => $fiche->date_fin->toDateString(),
             'sourate_debut_id' => $start?->numero,
@@ -459,22 +684,36 @@ class SuiviCoraniqueController extends Controller
         ];
     }
 
+    /** Sourates indexées par numéro : nom, nombre de versets et versets qui précèdent. */
+    private function referentielSourates(): array
+    {
+        if ($this->referentiel === null) {
+            $precedents = 0;
+            $this->referentiel = [];
+            foreach (Sourate::orderBy('numero')->get(['numero', 'nom', 'nombre_versets']) as $sourate) {
+                $this->referentiel[$sourate->numero] = ['nom' => $sourate->nom, 'versets' => $sourate->nombre_versets, 'avant' => $precedents];
+                $precedents += $sourate->nombre_versets;
+            }
+        }
+
+        return $this->referentiel;
+    }
+
     private function positionForName(string $name, int $verse): ?int
     {
-        $surah = Sourate::where('nom', $name)->first();
+        $numero = collect($this->referentielSourates())->search(fn (array $sourate) => $sourate['nom'] === $name);
 
-        return $surah ? $this->positionForNumber($surah->numero, $verse) : null;
+        return $numero === false ? null : $this->positionForNumber($numero, $verse);
     }
 
     private function positionForNumber(int $surahNumber, int $verse): ?int
     {
-        $surah = Sourate::find($surahNumber);
-        if (! $surah || $verse < 1 || $verse > $surah->nombre_versets) {
+        $surah = $this->referentielSourates()[$surahNumber] ?? null;
+        if (! $surah || $verse < 1 || $verse > $surah['versets']) {
             return null;
         }
-        $precedingVerses = Sourate::where('numero', '<', $surahNumber)->sum('nombre_versets');
 
-        return (int) $precedingVerses + $verse;
+        return $surah['avant'] + $verse;
     }
 
     private function countMergedIntervals(array $intervals): int

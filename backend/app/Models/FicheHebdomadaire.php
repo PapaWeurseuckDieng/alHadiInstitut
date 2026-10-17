@@ -22,6 +22,12 @@ class FicheHebdomadaire extends Model
         'debut_revision',
         'fin_revision',
         'statut',
+        'valide_par',
+        'valide_at',
+        'modification_demandee_at',
+        'motif_demande_modification',
+        'modification_autorisee_par',
+        'modification_autorisee_at',
     ];
 
     protected function casts(): array
@@ -31,6 +37,9 @@ class FicheHebdomadaire extends Model
             'date_fin' => 'date',
             'verset_debut' => 'integer',
             'verset_fin' => 'integer',
+            'valide_at' => 'datetime',
+            'modification_demandee_at' => 'datetime',
+            'modification_autorisee_at' => 'datetime',
         ];
     }
 
@@ -42,6 +51,16 @@ class FicheHebdomadaire extends Model
     public function enseignant(): BelongsTo
     {
         return $this->belongsTo(User::class, 'enseignant_id');
+    }
+
+    public function validateur(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'valide_par');
+    }
+
+    public function autorisateur(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'modification_autorisee_par');
     }
 
     public function notes(): HasMany

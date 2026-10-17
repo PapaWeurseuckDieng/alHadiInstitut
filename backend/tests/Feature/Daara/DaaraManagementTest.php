@@ -524,9 +524,9 @@ class DaaraManagementTest extends TestCase
             'reperes' => ['D' => ['sourate_debut_id' => 1, 'verset_debut' => 2, 'sourate_fin_id' => 1, 'verset_fin' => 7]],
             'qualite_recitation' => 2,
         ])->assertOk();
-        $this->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/soumettre')
-            ->assertOk()->assertJsonPath('data.statut', 'soumise');
-        $this->actingAs($admin)->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/valider')
+        // L'oustaz valide lui-même la fiche ; l'administration ne peut pas le faire à sa place
+        $this->actingAs($admin)->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/valider')->assertForbidden();
+        $this->actingAs($oustazUser)->postJson('/api/v1/fiches-hebdomadaires/'.$ficheId.'/valider')
             ->assertOk()->assertJsonPath('data.statut', 'validee');
 
         $this->actingAs($oustazUser)->postJson('/api/v1/eleves/'.$eleve->id.'/exemplarite', [

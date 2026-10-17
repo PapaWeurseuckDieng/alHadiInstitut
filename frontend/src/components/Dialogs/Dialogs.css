@@ -1,0 +1,85 @@
+/* Fenêtres de confirmation et d'alerte (DialogsProvider) */
+.app-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.app-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.app-dialog-body {
+  display: flex;
+  gap: 16px;
+  padding: 24px 24px 8px;
+}
+
+.app-dialog-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  color: var(--db-green, #0f5132);
+  background: var(--db-green-soft, #e8f1ec);
+}
+
+.app-dialog--danger .app-dialog-icon {
+  color: var(--db-red, #991b1b);
+  background: var(--db-red-soft, #fef2f2);
+}
+
+.app-dialog--warning .app-dialog-icon {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.app-dialog-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.app-dialog-text h2 {
+  margin: 4px 0 6px;
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+
+.app-dialog-text p {
+  margin: 0;
+  color: var(--db-muted, #475569);
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.app-dialog-text ul {
+  margin: 10px 0 0;
+  padding-inline-start: 18px;
+  color: var(--db-muted, #475569);
+}
+
+.app-dialog-field {
+  margin-top: 14px;
+}
+
+.app-dialog .db-dialog-footer {
+  border-top: 0;
+  padding-top: 12px;
+}
+
+.app-dialog-confirm--danger {
+  background: var(--db-red, #991b1b);
+  border-color: var(--db-red, #991b1b);
+}
+
+.app-dialog-confirm--danger:hover:not(:disabled) {
+  background: #7f1d1d;
+}
+
+@media (max-width: 520px) {
+  .app-dialog-body {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 18px 6px;
+  }
+}

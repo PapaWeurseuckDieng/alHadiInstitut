@@ -18,6 +18,7 @@ class ClasseAcademique extends Model
         'oustaz_id',
         'statut',
         'mensualite',
+        'frais_inscription',
     ];
 
     protected function casts(): array
@@ -25,9 +26,22 @@ class ClasseAcademique extends Model
         return [
             'effectif' => 'integer',
             'mensualite' => 'decimal:2',
+            'frais_inscription' => 'decimal:2',
             'is_archived' => 'boolean',
             'archived_at' => 'datetime',
         ];
+    }
+
+    /** Mensualité appliquée : tarif de la classe, sinon tarif par défaut. */
+    public function mensualiteAppliquee(): float
+    {
+        return (float) ($this->mensualite ?? config('paiements.mensualite_par_defaut'));
+    }
+
+    /** Frais d'inscription appliqués : montant de la classe, sinon montant par défaut. */
+    public function fraisInscriptionAppliques(): float
+    {
+        return (float) ($this->frais_inscription ?? config('paiements.frais_inscription_par_defaut'));
     }
 
     public function inscriptions(): HasMany

@@ -32,6 +32,12 @@ class RappelPaiement extends Model
         ];
     }
 
+    /** Administrateur ayant déclenché un envoi manuel (null pour un envoi automatique). */
+    public function expediteur(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'envoye_par');
+    }
+
     public function tuteur(): BelongsTo
     {
         return $this->belongsTo(Tuteur::class);

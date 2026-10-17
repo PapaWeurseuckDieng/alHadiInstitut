@@ -45,8 +45,10 @@ class DashboardTest extends TestCase
             ->assertOk()->assertJsonPath('data.stats.eleves', 1)
             ->assertJsonPath('data.stats.classes', 1)
             ->assertJsonPath('data.stats.a_affecter', 1)
-            ->assertJsonCount(1, 'data.items')->assertJsonCount(1, 'data.options.tuteurs')
-            ->assertJsonPath('data.options.tuteurs.0.id', $tuteur->id);
+            ->assertJsonCount(1, 'data.items')
+            // Plus de liste complète des tuteurs : la recherche GET /v1/admin/tuteurs la remplace
+            ->assertJsonMissingPath('data.options.tuteurs');
+        $this->getJson('/api/v1/admin/tuteurs?q='.urlencode($tuteur->user->prenom))->assertOk()->assertJsonPath('data.0.id', $tuteur->id);
         $this->getJson('/api/v1/admin/dashboard?section=users')
             ->assertOk()->assertJsonMissingPath('data.items.0.password')
             ->assertJsonMissingPath('data.items.0.remember_token');

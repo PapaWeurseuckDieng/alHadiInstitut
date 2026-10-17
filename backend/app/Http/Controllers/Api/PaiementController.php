@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ModePaiement;
+use App\Enums\Role;
 use App\Enums\StatutPaiement;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
@@ -12,13 +13,14 @@ use App\Models\Inscription;
 use App\Models\Paiement;
 use App\Models\RappelPaiement;
 use App\Models\Tuteur;
+use App\Services\EncaissementMensualite;
+use App\Services\PhotoProfil;
 use App\Services\RappelsPaiement;
 use App\Support\AnneeScolaire;
 use App\Support\Mensualites;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -32,7 +34,10 @@ class PaiementController extends Controller
     /** Nombre d'élèves par page dans la liste du mois. */
     private const PAR_PAGE = 20;
 
-    public function __construct(private readonly RappelsPaiement $rappels) {}
+    public function __construct(
+        private readonly RappelsPaiement $rappels,
+        private readonly EncaissementMensualite $encaissement,
+    ) {}
 
     /**
      * GET /v1/paiements : situation de tous les élèves pour un mois
@@ -126,65 +131,88 @@ class PaiementController extends Controller
             throw ValidationException::withMessages(['mois' => 'Ce mois ne fait pas partie des mois facturés.']);
         }
 
-        $paiement = DB::transaction(function () use ($data, $request) {
-            $inscription = Mensualites::inscriptionsConcernees($data['mois'])->firstWhere('eleve_id', (int) $data['eleve_id']);
-            if (! $inscription) {
-                throw ValidationException::withMessages(['eleve_id' => 'Cet élève n’a pas d’inscription active pour ce mois.']);
-            }
+        $inscription = Mensualites::inscriptionsConcernees($data['mois'])->firstWhere('eleve_id', (int) $data['eleve_id']);
+        if (! $inscription) {
+            throw ValidationException::withMessages(['eleve_id' => 'Cet élève n’a pas d’inscription active pour ce mois.']);
+        }
 
-            // Verrouille les paiements du mois de cet élève pour éviter un double encaissement simultané
-            $dejaPayes = Paiement::valides()->where('eleve_id', $inscription->eleve_id)->where('mois', $data['mois'])
-                ->lockForUpdate()->get();
-            $ligne = Mensualites::ligne($inscription, $dejaPayes);
-
-            if ($ligne['reste'] <= 0) {
-                throw ValidationException::withMessages(['mois' => 'Cette mensualité est déjà entièrement réglée.']);
-            }
-            if ((float) $data['montant'] > $ligne['reste']) {
-                throw ValidationException::withMessages([
-                    'montant' => 'Le montant dépasse le reste à payer ('.Mensualites::formaterMontant($ligne['reste']).').',
-                ]);
-            }
-
-            $paiement = Paiement::create([
-                'eleve_id' => $inscription->eleve_id,
-                'inscription_id' => $inscription->id,
-                'annee_scolaire' => $inscription->annee_scolaire,
-                'mois' => $data['mois'],
-                'montant_du' => $ligne['montant_du'],
-                'montant' => $data['montant'],
-                'mode_paiement' => $data['mode_paiement'],
-                'date_paiement' => $data['date_paiement'] ?? Carbon::today()->toDateString(),
-                'note' => $data['note'] ?? null,
-                'encaisse_par' => $request->user()->id,
-            ]);
-            // Numéro de reçu unique et croissant, ex. REC-2026-000042
-            $paiement->update(['numero_recu' => sprintf('REC-%s-%06d', now()->format('Y'), $paiement->id)]);
-
-            AuditEvent::create([
-                'actor_user_id' => $request->user()->id,
-                'action' => 'paiement.encaisse',
-                'entity_type' => 'paiement',
-                'entity_id' => $paiement->id,
-                'metadata' => ['eleve_id' => $paiement->eleve_id, 'mois' => $paiement->mois, 'montant' => (float) $paiement->montant],
-                'created_at' => now(),
-            ]);
-
-            return $paiement;
-        });
+        $paiement = $this->encaissement->encaisser($inscription, $data, $request->user());
 
         return response()->json([
             'message' => 'Paiement enregistré.',
-            'data' => $this->recuData($paiement->fresh()),
+            'data' => $this->encaissement->donneesRecu($paiement->fresh()),
         ], 201);
     }
 
     /**
-     * GET /v1/paiements/{id}/recu : données du reçu à imprimer.
+     * GET /v1/paiements/{id}/recu : données du reçu à imprimer (Admin, ou tuteur rattaché à l'élève).
      */
-    public function recu(int $paiementId): JsonResponse
+    public function recu(Request $request, int $paiementId): JsonResponse
     {
-        return response()->json(['data' => $this->recuData(Paiement::findOrFail($paiementId))]);
+        $paiement = Paiement::findOrFail($paiementId);
+        if ($request->user()->role === Role::Tuteur && ! $this->enfantsDuTuteur($request)->contains($paiement->eleve_id)) {
+            return response()->json(['message' => 'Ce reçu ne concerne pas vos enfants.'], 403);
+        }
+
+        return response()->json(['data' => $this->encaissement->donneesRecu($paiement)]);
+    }
+
+    /**
+     * GET /v1/tuteur/me/recus : tous les reçus (mensualités et frais d'inscription) des enfants
+     * du tuteur connecté, du plus récent au plus ancien. Les reçus annulés sont signalés.
+     */
+    public function mesRecus(Request $request): JsonResponse
+    {
+        $enfants = $this->enfantsDuTuteur($request);
+        $eleve = fn ($eleve) => $eleve ? ['id' => $eleve->id, 'matricule' => $eleve->matricule, 'nom' => $eleve->nom, 'prenom' => $eleve->prenom] : null;
+
+        $mensualites = Paiement::with(['eleve', 'inscription.classeAcademique'])->whereIn('eleve_id', $enfants)->get()
+            ->map(fn (Paiement $paiement) => [
+                'type' => 'mensualite',
+                'id' => $paiement->id,
+                'numero_recu' => $paiement->numero_recu,
+                'date_paiement' => $paiement->date_paiement->toDateString(),
+                'mois' => $paiement->mois,
+                'libelle' => 'Mensualité de '.Mensualites::libelleMois($paiement->mois),
+                'annee_scolaire' => $paiement->annee_scolaire,
+                'eleve' => $eleve($paiement->eleve),
+                'classe' => $paiement->inscription?->classeAcademique?->nom,
+                'montant' => (float) $paiement->montant,
+                'mode_paiement' => $paiement->mode_paiement->value,
+                'annule' => $paiement->estAnnule(),
+            ]);
+        $inscriptions = Inscription::with(['eleve', 'classeAcademique'])->whereIn('eleve_id', $enfants)
+            ->whereNotNull('numero_recu_inscription')->get()
+            ->map(fn (Inscription $inscription) => [
+                'type' => 'inscription',
+                'id' => $inscription->id,
+                'numero_recu' => $inscription->numero_recu_inscription,
+                'date_paiement' => $inscription->date_paiement_inscription?->toDateString(),
+                'mois' => null,
+                'libelle' => 'Frais d’inscription '.$inscription->annee_scolaire,
+                'annee_scolaire' => $inscription->annee_scolaire,
+                'eleve' => $eleve($inscription->eleve),
+                'classe' => $inscription->classeAcademique?->nom,
+                'montant' => (float) $inscription->montant_inscription,
+                'mode_paiement' => $inscription->mode_paiement?->value,
+                'annule' => false,
+            ]);
+        $recus = $mensualites->concat($inscriptions)
+            ->sortBy([['date_paiement', 'desc'], ['numero_recu', 'desc']])->values();
+
+        return response()->json(['data' => [
+            'recus' => $recus,
+            'total_paye' => $recus->where('annule', false)->sum('montant'),
+            'devise' => config('paiements.devise'),
+        ]]);
+    }
+
+    /** Identifiants des enfants rattachés au tuteur connecté. */
+    private function enfantsDuTuteur(Request $request)
+    {
+        $tuteur = Tuteur::where('user_id', $request->user()->id)->first();
+
+        return $tuteur ? $tuteur->eleves()->pluck('eleves.id') : collect();
     }
 
     /**
@@ -218,11 +246,11 @@ class PaiementController extends Controller
             'created_at' => now(),
         ]);
 
-        return response()->json(['message' => 'Reçu annulé.', 'data' => $this->recuData($paiement->fresh())]);
+        return response()->json(['message' => 'Reçu annulé.', 'data' => $this->encaissement->donneesRecu($paiement->fresh())]);
     }
 
     /**
-     * GET /v1/paiements/tarifs : mensualité de chaque classe de l'année en cours.
+     * GET /v1/paiements/tarifs : mensualité et frais d'inscription de chaque classe de l'année en cours.
      */
     public function tarifs(): JsonResponse
     {
@@ -231,6 +259,7 @@ class PaiementController extends Controller
         return response()->json(['data' => [
             'annee_scolaire' => AnneeScolaire::courante(),
             'defaut' => $defaut,
+            'defaut_frais_inscription' => (float) config('paiements.frais_inscription_par_defaut'),
             'devise' => config('paiements.devise'),
             'classes' => ClasseAcademique::where('annee_scolaire', AnneeScolaire::courante())
                 ->where('is_archived', false)->orderBy('nom')->get()
@@ -239,26 +268,32 @@ class PaiementController extends Controller
                     'nom' => $classe->nom,
                     'niveau' => $classe->niveau,
                     'mensualite' => $classe->mensualite !== null ? (float) $classe->mensualite : null,
-                    'mensualite_appliquee' => (float) ($classe->mensualite ?? $defaut),
+                    'mensualite_appliquee' => $classe->mensualiteAppliquee(),
+                    'frais_inscription' => $classe->frais_inscription !== null ? (float) $classe->frais_inscription : null,
+                    'frais_inscription_appliques' => $classe->fraisInscriptionAppliques(),
                 ]),
         ]]);
     }
 
     /**
-     * PUT /v1/paiements/tarifs : modifie la mensualité des classes (vide = tarif par défaut).
-     * N'affecte pas les reçus déjà émis.
+     * PUT /v1/paiements/tarifs : modifie la mensualité et/ou les frais d'inscription des classes
+     * (vide = montant par défaut ; champ absent = inchangé). N'affecte pas les reçus déjà émis.
      */
     public function updateTarifs(Request $request): JsonResponse
     {
         $data = $request->validate([
             'tarifs' => ['required', 'array', 'min:1'],
             'tarifs.*.classe_id' => ['required', 'integer', Rule::exists('classes_academiques', 'id')],
-            'tarifs.*.mensualite' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'tarifs.*.mensualite' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
+            'tarifs.*.frais_inscription' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
         ]);
 
         DB::transaction(function () use ($data, $request) {
             foreach ($data['tarifs'] as $tarif) {
-                ClasseAcademique::whereKey($tarif['classe_id'])->update(['mensualite' => $tarif['mensualite'] ?? null]);
+                $valeurs = collect($tarif)->only(['mensualite', 'frais_inscription'])->all();
+                if ($valeurs !== []) {
+                    ClasseAcademique::whereKey($tarif['classe_id'])->update($valeurs);
+                }
             }
             AuditEvent::create([
                 'actor_user_id' => $request->user()->id,
@@ -278,18 +313,38 @@ class PaiementController extends Controller
      */
     public function rappels(Request $request): JsonResponse
     {
-        $mois = $request->validate(['mois' => ['sometimes', 'regex:'.Mensualites::REGEX_MOIS]])['mois'] ?? Mensualites::moisParDefaut();
+        $filtres = $request->validate([
+            'mois' => ['sometimes', 'regex:'.Mensualites::REGEX_MOIS],
+            'statut' => ['sometimes', 'nullable', Rule::in(['envoye', 'simule', 'echec'])],
+        ]);
+        $mois = $filtres['mois'] ?? Mensualites::moisParDefaut();
+        $base = RappelPaiement::where('mois', $mois);
 
-        return response()->json(['data' => RappelPaiement::with('tuteur.user')->where('mois', $mois)->orderByDesc('id')->limit(200)->get()
-            ->map(fn (RappelPaiement $rappel) => [
-                'id' => $rappel->id,
-                'tuteur' => trim(($rappel->tuteur?->user?->prenom ?? '').' '.($rappel->tuteur?->user?->nom ?? '')),
-                'telephone' => $rappel->telephone,
-                'statut' => $rappel->statut,
-                'automatique' => $rappel->automatique,
-                'erreur' => $rappel->erreur,
-                'created_at' => $rappel->created_at?->toIso8601String(),
-            ])]);
+        return response()->json([
+            'data' => (clone $base)->with(['tuteur.user', 'expediteur'])
+                ->when($filtres['statut'] ?? null, fn ($query, $statut) => $query->where('statut', $statut))
+                ->orderByDesc('id')->limit(200)->get()
+                ->map(fn (RappelPaiement $rappel) => [
+                    'id' => $rappel->id,
+                    'mois' => $rappel->mois,
+                    'tuteur' => trim(($rappel->tuteur?->user?->prenom ?? '').' '.($rappel->tuteur?->user?->nom ?? '')),
+                    'telephone' => $rappel->telephone,
+                    'canal' => $rappel->canal,
+                    'statut' => $rappel->statut,
+                    'automatique' => $rappel->automatique,
+                    // Envoi manuel : qui a cliqué sur « Envoyer les rappels »
+                    'envoye_par' => $rappel->expediteur ? trim($rappel->expediteur->prenom.' '.$rappel->expediteur->nom) : null,
+                    'message' => $rappel->message,
+                    'erreur' => $rappel->erreur,
+                    'created_at' => $rappel->created_at?->toIso8601String(),
+                ]),
+            // Totaux du mois, tous statuts confondus
+            'totaux' => [
+                'envoye' => (clone $base)->where('statut', 'envoye')->count(),
+                'simule' => (clone $base)->where('statut', 'simule')->count(),
+                'echec' => (clone $base)->where('statut', 'echec')->count(),
+            ],
+        ]);
     }
 
     /**
@@ -396,42 +451,9 @@ class PaiementController extends Controller
         ];
     }
 
-    /** Données d'un reçu (impression). */
-    private function recuData(Paiement $paiement): array
-    {
-        $paiement->loadMissing(['eleve.tuteurs.user', 'inscription.classeAcademique', 'caissier', 'annulePar']);
-        // Total réglé pour ce mois (paiements valides) et reste après ce paiement
-        $totalMois = (float) Paiement::valides()->where('eleve_id', $paiement->eleve_id)->where('mois', $paiement->mois)->sum('montant');
-        $payeur = $paiement->eleve ? Mensualites::tuteursAPrevenir($paiement->eleve)->first() : null;
-
-        return [
-            'id' => $paiement->id,
-            'numero_recu' => $paiement->numero_recu,
-            'date_paiement' => $paiement->date_paiement->toDateString(),
-            'mois' => $paiement->mois,
-            'mois_libelle' => Mensualites::libelleMois($paiement->mois),
-            'annee_scolaire' => $paiement->annee_scolaire,
-            'eleve' => $paiement->eleve ? $this->eleveData($paiement->eleve) : null,
-            'classe' => $paiement->inscription?->classeAcademique?->nom,
-            'tuteur' => $payeur ? trim($payeur->user->prenom.' '.$payeur->user->nom) : null,
-            'montant' => (float) $paiement->montant,
-            'montant_du' => (float) $paiement->montant_du,
-            'total_paye_mois' => $totalMois,
-            'reste' => max(0, (float) $paiement->montant_du - $totalMois),
-            'mode_paiement' => $paiement->mode_paiement->value,
-            'note' => $paiement->note,
-            'encaisse_par' => $paiement->caissier ? trim($paiement->caissier->prenom.' '.$paiement->caissier->nom) : null,
-            'devise' => config('paiements.devise'),
-            'annule' => $paiement->estAnnule(),
-            'annule_at' => $paiement->annule_at?->toIso8601String(),
-            'motif_annulation' => $paiement->motif_annulation,
-            'created_at' => $paiement->created_at?->toIso8601String(),
-        ];
-    }
-
     private function eleveData(Eleve $eleve): array
     {
-        return ['id' => $eleve->id, 'matricule' => $eleve->matricule, 'nom' => $eleve->nom, 'prenom' => $eleve->prenom];
+        return ['id' => $eleve->id, 'matricule' => $eleve->matricule, 'nom' => $eleve->nom, 'prenom' => $eleve->prenom, 'photo' => PhotoProfil::url($eleve->photo)];
     }
 
     /** État des rappels automatiques pour le mois affiché. */

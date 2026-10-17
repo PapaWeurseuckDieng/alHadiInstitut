@@ -44,6 +44,11 @@ class Eleve extends Model
         return $this->hasMany(FicheHebdomadaire::class, 'eleve_id');
     }
 
+    public function diplomes(): HasMany
+    {
+        return $this->hasMany(Diplome::class, 'eleve_id');
+    }
+
     public function paiements(): HasMany
     {
         return $this->hasMany(Paiement::class, 'eleve_id');

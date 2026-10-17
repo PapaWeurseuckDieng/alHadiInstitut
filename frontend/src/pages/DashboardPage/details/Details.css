@@ -1,0 +1,253 @@
+/* Fenêtres de détail (élève, compte, classe) */
+
+.detail-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.db-avatar.detail-avatar {
+  width: 88px;
+  height: 88px;
+  font-size: 1.5rem;
+}
+
+.detail-info {
+  flex: 1 1 18rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.detail-info dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--db-subtle);
+  text-transform: uppercase;
+}
+
+.detail-info dd {
+  margin: 2px 0 0;
+}
+
+.detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.detail-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+}
+
+.detail-list li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-list small {
+  display: block;
+  color: var(--db-subtle);
+}
+
+/* Libellé sur deux lignes (inscription + frais, diplôme + numéro) */
+.detail-list li > span.detail-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.detail-fees {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  color: #92400e !important;
+}
+
+.detail-fees--paid {
+  color: var(--db-green) !important;
+}
+
+.detail-fees a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.detail-fees-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--db-green);
+  border-radius: 10px;
+  background: var(--db-green-soft);
+}
+
+.detail-fees-box strong {
+  color: var(--db-green);
+  font-size: 1.15rem;
+}
+
+.detail-cancelled {
+  opacity: 0.6;
+}
+
+.detail-receipt-link {
+  margin-bottom: 12px;
+}
+
+/* Élève d'une classe : la ligne entière ouvre sa fiche */
+.detail-list li:has(> .detail-student-link) {
+  padding: 4px;
+}
+
+.db-person-link.detail-student-link {
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.detail-student-arrow {
+  margin-inline-start: auto;
+  color: var(--db-subtle);
+}
+
+.detail-danger {
+  color: var(--db-red);
+}
+
+.db-button.detail-danger-solid {
+  background: var(--db-red);
+  border-color: var(--db-red);
+  color: #ffffff;
+}
+
+.detail-warning {
+  border-color: var(--db-red-soft);
+  background: var(--db-red-soft);
+  color: var(--db-red);
+}
+
+.detail-dialog .db-field textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+/* ---------- Synthèse d'un enfant (tuteur) ---------- */
+
+.synth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 12px;
+}
+
+.synth-card {
+  padding: 14px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.synth-card h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.synth-big {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--db-green);
+  line-height: 1.1;
+}
+
+.synth-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.synth-bars li {
+  display: grid;
+  grid-template-columns: 1fr 5rem auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.synth-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--db-line-soft);
+  overflow: hidden;
+}
+
+.synth-bar span {
+  display: block;
+  height: 100%;
+  background: var(--db-green);
+}
+
+.synth-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.synth-week {
+  padding: 12px 14px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.synth-week header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.synth-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+
+.synth-days strong {
+  display: inline-block;
+  min-width: 5.5rem;
+  text-transform: capitalize;
+}
+
+/* Bouton « Rattacher un tuteur » sous la liste des tuteurs */
+.detail-add {
+  margin-top: 10px;
+}

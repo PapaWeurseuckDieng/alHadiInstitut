@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from '../../components/Icon'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
+import PhotoField from '../../components/PhotoField/PhotoField'
+import TuteurPicker from '../../components/TuteurPicker/TuteurPicker'
 import { useI18n } from '../../i18n/useI18n'
 import { changePassword } from '../../services/authService'
 import { createRecord } from '../../services/dashboardService'
+import { usePaymentFormat } from './paiements/usePaymentFormat'
 
 /* ==========================================================================
    Formulaires en fenêtre modale : élève, classe, compte, mot de passe.
@@ -15,8 +18,8 @@ import { createRecord } from '../../services/dashboardService'
 // Icône de l'en-tête selon le formulaire
 const ICONS = { eleve: 'users', classe: 'book', user: 'shield', password: 'shield' }
 
-/** Tuteur vide, ajouté par « Ajouter un tuteur ». */
-const newGuardian = () => ({ mode: 'creer', nom: '', prenom: '', telephone: '', sexe: '', adresse: '', lien_parente: '', est_responsable_legal: true, est_payeur: false, tuteur_id: '' })
+/** Tuteur vide, ajouté par « Ajouter un tuteur ». « tuteur » : compte existant choisi par la recherche. */
+const newGuardian = () => ({ mode: 'creer', nom: '', prenom: '', telephone: '', sexe: '', adresse: '', lien_parente: '', est_responsable_legal: true, est_payeur: false, tuteur: null })
 
 /**
  * Champ texte (ou mot de passe) avec libellé, astérisque si obligatoire et message d'erreur.
@@ -83,7 +86,7 @@ function SectionTitle({ children }) {
 }
 
 export default function RecordForm({ kind, options, year, onClose, onSaved, onSessionExpired }) {
-  const { t, lang, serverMessage } = useI18n()
+  const { t, serverMessage } = useI18n()
   const dialog = useRef(null)
   const errorBox = useRef(null)
   // Verrou synchrone contre le double envoi
@@ -94,6 +97,14 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
   const [errors, setErrors] = useState({})
   // Erreur générale : message + code HTTP (traduit au moment de l'affichage)
   const [message, setMessage] = useState(null)
+  // Photo (élève, compte) : fichier prêt à l'envoi, ou null
+  const [photo, setPhoto] = useState(null)
+  // Paiement saisi pendant l'inscription : frais d'inscription (montant de la classe, cochés par défaut)
+  // et mensualites = { 'AAAA-MM': 'montant' } des mois cochés
+  const [payment, setPayment] = useState({ frais: true, mode_paiement: 'especes', mensualites: {} })
+  // Inscription réussie avec paiement : étape « reçus à imprimer »
+  const [success, setSuccess] = useState(null)
+  const { amount, monthLabel } = usePaymentFormat()
 
   // Ouvre la fenêtre modale native au montage, la referme au démontage
   useEffect(() => {
@@ -107,6 +118,11 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
     const { name, value } = event.target
     setValues(previous => ({ ...previous, [name]: value, ...(name === 'annee_scolaire' ? { inscription_ids: [] } : {}) }))
     setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => key !== name)))
+    // Changement de classe : les mois déjà cochés reprennent le tarif de la nouvelle classe
+    if (name === 'classe_id') {
+      const fee = options?.classes?.find(classe => String(classe.id) === String(value))?.mensualite
+      if (fee) setPayment(previous => ({ ...previous, mensualites: Object.fromEntries(Object.keys(previous.mensualites).map(mois => [mois, String(fee)])) }))
+    }
   }
 
   /** Erreur d'un champ renvoyée par Laravel, traduite si possible (sinon texte d'origine). */
@@ -130,6 +146,35 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
     setGuardians(previous => previous.map((guardian, i) => i === index ? { ...guardian, [name]: value } : guardian))
   }
 
+  // Montants de la classe choisie (fixés par l'administration dans « Tarifs ») : jamais saisis ici
+  const selectedClass = options?.classes?.find(classe => String(classe.id) === String(values.classe_id))
+  const monthlyFee = selectedClass?.mensualite ?? null
+  const enrollmentFee = selectedClass?.frais_inscription ?? 0
+  const feesPaid = payment.frais && enrollmentFee > 0
+  // Mois cochés, dans l'ordre chronologique (même ordre que les lignes envoyées à l'API)
+  const paidMonths = Object.keys(payment.mensualites).sort()
+  const paymentTotal = (feesPaid ? enrollmentFee : 0) + paidMonths.reduce((sum, mois) => sum + (Number(payment.mensualites[mois]) || 0), 0)
+
+  /** Coche ou décoche un mois ; un mois coché reçoit le montant de la mensualité. */
+  function toggleMonth(mois, checked) {
+    setPayment(previous => {
+      const mensualites = { ...previous.mensualites }
+      if (checked) mensualites[mois] = monthlyFee ? String(monthlyFee) : ''
+      else delete mensualites[mois]
+      return { ...previous, mensualites }
+    })
+  }
+
+  /** Bloc « paiement » envoyé avec l'inscription (undefined si rien n'est encaissé). */
+  function paymentBody() {
+    if (!feesPaid && !paidMonths.length) return undefined
+    return {
+      mode_paiement: payment.mode_paiement,
+      frais_inscription: feesPaid,
+      mensualites: paidMonths.map(mois => ({ mois, montant: Number(payment.mensualites[mois]) })),
+    }
+  }
+
   /** Envoie le formulaire à l'API et remonte le message de succès à la page. */
   async function submit(event) {
     event.preventDefault()
@@ -144,24 +189,36 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
         onSaved(t('login.passwordChanged'), 'login.passwordChanged')
       } else {
         let body
-        if (kind === 'user') body = { nom: values.nom, prenom: values.prenom, telephone: values.telephone, sexe: values.sexe, adresse: values.adresse || null, role: values.role }
-        if (kind === 'classe') body = { nom: values.nom, niveau: values.niveau, oustaz_id: Number(values.oustaz_id), inscription_ids: values.inscription_ids }
+        if (kind === 'user') body = { nom: values.nom, prenom: values.prenom, telephone: values.telephone, sexe: values.sexe, adresse: values.adresse || null, role: values.role, photo }
+        if (kind === 'classe') {
+          body = {
+            nom: values.nom, niveau: values.niveau, oustaz_id: Number(values.oustaz_id), inscription_ids: values.inscription_ids,
+            // Montants propres à la classe ; vides = montants par défaut
+            mensualite: values.mensualite ? Number(values.mensualite) : null,
+            frais_inscription: values.frais_inscription ? Number(values.frais_inscription) : null,
+          }
+        }
         if (kind === 'eleve') body = {
           classe_id: Number(values.classe_id),
           eleve: { nom: values.nom, prenom: values.prenom, date_naissance: values.date_naissance || null, sexe: values.sexe, adresse: values.adresse || null },
           tuteurs: guardians.map(g => ({
             mode: g.mode, lien_parente: g.lien_parente || null, est_responsable_legal: g.est_responsable_legal, est_payeur: g.est_payeur,
-            ...(g.mode === 'existant' ? { tuteur_id: Number(g.tuteur_id) } : { compte: { nom: g.nom, prenom: g.prenom, telephone: g.telephone, sexe: g.sexe, adresse: g.adresse || null } }),
+            ...(g.mode === 'existant' ? { tuteur_id: g.tuteur?.id ?? null } : { compte: { nom: g.nom, prenom: g.prenom, telephone: g.telephone, sexe: g.sexe, adresse: g.adresse || null } }),
           })),
+          paiement: paymentBody(),
+          photo,
         }
         const response = await createRecord(kind, body)
         const temporary = kind === 'user' || (kind === 'eleve' && guardians.some(g => g.mode === 'creer'))
         // Message du serveur (traduit en arabe si connu) + matricule + rappel du mot de passe temporaire
-        onSaved(
-          serverMessage(response.message, 201, { fallback: 'original' })
+        const savedMessage = serverMessage(response.message, 201, { fallback: 'original' })
           + (kind === 'eleve' ? t('form.saved.matricule', { matricule: response.data.eleve.matricule }) : '')
-          + (temporary ? t('form.saved.tempPassword') : ''),
-        )
+          + (temporary ? t('form.saved.tempPassword') : '')
+        // Paiement encaissé : la fenêtre reste ouverte sur les reçus à imprimer
+        const recus = response.data?.recus ?? []
+        const recuFrais = response.data?.recu_inscription ?? null
+        if (kind === 'eleve' && (recus.length || recuFrais)) setSuccess({ message: savedMessage, recus, recuFrais, eleve: response.data.eleve })
+        else onSaved(savedMessage)
       }
     } catch (error) {
       if (error.status === 401) { onSessionExpired(); return }
@@ -178,8 +235,8 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
   // Inscriptions sans classe de l'année courante, proposées à l'affectation
   const eligible = (options?.inscriptions || []).filter(i => i.annee_scolaire === values.annee_scolaire)
   const errorList = Object.entries(errors).filter(([, messages]) => messages?.length)
-  // Marque « gauche à droite » devant un numéro en arabe : « +221… » ne doit pas être inversé dans une liste
-  const ltrMark = lang === 'ar' ? '‎' : ''
+  // Fermeture : après une inscription réussie, la liste doit être rechargée (onSaved)
+  const close = () => (success ? onSaved(success.message) : onClose())
 
   return (
     <dialog
@@ -187,22 +244,56 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
       className="db-dialog"
       aria-labelledby="form-title"
       // Échap ferme la fenêtre, sauf pendant l'envoi et pour le changement de mot de passe obligatoire
-      onCancel={event => { event.preventDefault(); if (!busy && kind !== 'password') onClose() }}
+      onCancel={event => { event.preventDefault(); if (!busy && kind !== 'password') close() }}
     >
       {/* ---------- En-tête ---------- */}
       <div className="db-dialog-heading">
-        <span className="db-dialog-icon"><Icon name={ICONS[kind]} /></span>
+        <span className="db-dialog-icon"><Icon name={success ? 'check' : ICONS[kind]} /></span>
         <div>
-          <h2 id="form-title">{t(`form.${kind}.title`)}</h2>
-          <p>{t(`form.${kind}.text`)}</p>
+          <h2 id="form-title">{success ? t('form.payment.successTitle') : t(`form.${kind}.title`)}</h2>
+          <p>{success ? success.message : t(`form.${kind}.text`)}</p>
         </div>
         {kind !== 'password' && (
-          <button type="button" className="db-icon-button" aria-label={t('form.close')} disabled={busy} onClick={onClose}>
+          <button type="button" className="db-icon-button" aria-label={t('form.close')} disabled={busy} onClick={close}>
             <Icon name="close" />
           </button>
         )}
       </div>
 
+      {success ? (
+        /* ---------- Inscription enregistrée avec paiement : reçus à imprimer ---------- */
+        <>
+          <div className="db-dialog-body">
+            <div className="pay-success">
+              <span className="pay-success-icon" aria-hidden="true"><Icon name="check" size={28} /></span>
+              <p className="pay-success-amount">{amount((success.recuFrais?.montant || 0) + success.recus.reduce((sum, recu) => sum + recu.montant, 0))}</p>
+              <p>{success.eleve.prenom} {success.eleve.nom} · <bdi>{success.eleve.matricule}</bdi></p>
+            </div>
+            <ul className="enroll-receipts">
+              {success.recuFrais && (
+                <li>
+                  <span>{t('form.payment.fees')}<small>{t('pay.form.successText', { numero: success.recuFrais.numero_recu, amount: amount(success.recuFrais.montant) })}</small></span>
+                  <a className="db-button db-button--secondary" href={`/recus/inscription/${success.recuFrais.id}`} target="_blank" rel="noopener noreferrer">
+                    <Icon name="printer" size={16} />{t('form.payment.printFeesReceipt')}
+                  </a>
+                </li>
+              )}
+              {success.recus.map(recu => (
+                <li key={recu.id}>
+                  <span>{t('form.payment.monthly', { month: monthLabel(recu.mois) })}<small>{t('pay.form.successText', { numero: recu.numero_recu, amount: amount(recu.montant) })}</small></span>
+                  {/* Clic de l'utilisateur : le nouvel onglet n'est pas bloqué par le navigateur */}
+                  <a className="db-button db-button--secondary" href={`/recus/${recu.id}`} target="_blank" rel="noopener noreferrer">
+                    <Icon name="printer" size={16} />{t('form.payment.printReceipt', { month: monthLabel(recu.mois) })}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="db-dialog-footer">
+            <button type="button" className="db-button" onClick={close}>{t('form.payment.done')}<Icon name="check" size={17} /></button>
+          </div>
+        </>
+      ) : (
       <form onSubmit={submit}>
         {/*
           Zone qui défile : un <div>, car Chrome et Edge ne font pas défiler un <fieldset>.
@@ -243,6 +334,9 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
                     <>
                       {field('nomClasse', 'nom', { required: true, maxLength: 120, placeholder: t('form.placeholders.classe') })}
                       {field('niveau', 'niveau', { required: true, maxLength: 80, placeholder: t('form.placeholders.niveau') })}
+                      {/* Montants de la classe : vides = montants par défaut de l'institut */}
+                      {field('mensualite', 'mensualite', { type: 'number', min: 0, step: 500, inputMode: 'numeric', placeholder: t('form.placeholders.defaultAmount') })}
+                      {field('fraisInscription', 'frais_inscription', { type: 'number', min: 0, step: 500, inputMode: 'numeric', placeholder: t('form.placeholders.defaultAmount') })}
                     </>
                   ) : (
                     <>
@@ -268,6 +362,7 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
                       </SelectField>
                       {field('adresse', 'adresse', { maxLength: 255 })}
                     </div>
+                    <PhotoField label={t('photo.accountLabel')} value={photo} onChange={setPhoto} error={fieldError('photo')} disabled={busy} />
                     <div className="db-callout">
                       <Icon name="shield" />
                       <span>{t('form.notes.tempPasswordStart')} <strong>passer</strong>{t('form.notes.tempPasswordEnd')}</span>
@@ -283,6 +378,7 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
                       {sexField('sexe', values.sexe, change, fieldError('eleve.sexe'))}
                     </div>
                     {field('adresse', 'adresse', { maxLength: 255 })}
+                    <PhotoField label={t('photo.studentLabel')} value={photo} onChange={setPhoto} error={fieldError('photo')} disabled={busy} />
                   </>
                 )}
 
@@ -358,10 +454,16 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
                         </div>
 
                         {g.mode === 'existant' ? (
-                          <SelectField id={`field-tuteurs.${index}.tuteur_id`} label={requiredLabel(t('form.fields.tuteurActif'))} required value={g.tuteur_id} onChange={e => changeGuardian(index, 'tuteur_id', e.target.value)} error={fieldError(`tuteurs.${index}.tuteur_id`)}>
-                            <option value="">{t('form.options.selectTutor')}</option>
-                            {options?.tuteurs.map(tuteur => <option key={tuteur.id} value={tuteur.id}>{tuteur.label} · {ltrMark}{tuteur.telephone}</option>)}
-                          </SelectField>
+                          // Recherche par prénom, nom ou téléphone ; les homonymes se distinguent par le numéro
+                          <TuteurPicker
+                            id={`field-tuteurs.${index}.tuteur_id`}
+                            label={requiredLabel(t('form.fields.tuteurActif'))}
+                            value={g.tuteur}
+                            onChange={tuteur => changeGuardian(index, 'tuteur', tuteur)}
+                            error={fieldError(`tuteurs.${index}.tuteur_id`)}
+                            onSessionExpired={onSessionExpired}
+                            disabled={busy}
+                          />
                         ) : (
                           <>
                             <div className="db-form-grid">
@@ -408,6 +510,73 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
                     <button type="button" className="db-button db-button--secondary" onClick={() => setGuardians(gs => [...gs, { ...newGuardian(), est_responsable_legal: false }])}>
                       <Icon name="plus" size={16} />{t('form.addTutor')}
                     </button>
+
+                    {/* ---------- Élève : frais d'inscription (montant de la classe) et mensualités payées ---------- */}
+                    <SectionTitle>{t('form.sections.payment')}</SectionTitle>
+                    {fieldError('paiement') && <p className="db-field-error">{fieldError('paiement')}</p>}
+
+                    <div className="enroll-payment">
+                      {!selectedClass ? (
+                        <p className="db-form-note">{t('form.payment.chooseClassFirst')}</p>
+                      ) : enrollmentFee > 0 ? (
+                        // Montant affiché, non modifiable : il est fixé pour la classe dans « Tarifs »
+                        <label className={`enroll-fees ${payment.frais ? 'enroll-fees--checked' : ''}`}>
+                          <input type="checkbox" checked={payment.frais} onChange={event => setPayment(p => ({ ...p, frais: event.target.checked }))} />
+                          <span>
+                            <strong>{t('form.payment.feesPaid')}</strong>
+                            <small>{t('form.payment.feesFixed', { classe: selectedClass.nom })}</small>
+                          </span>
+                          <output className="enroll-fees-amount" aria-label={t('form.payment.fees')}>{amount(enrollmentFee)}</output>
+                        </label>
+                      ) : (
+                        <p className="db-form-note">{t('form.payment.noFees')}</p>
+                      )}
+                      {fieldError('paiement.frais_inscription') && <p className="db-field-error">{fieldError('paiement.frais_inscription')}</p>}
+
+                      <p className="db-form-note">
+                        {monthlyFee ? t('form.payment.monthlyFee', { amount: amount(monthlyFee) }) : null}
+                      </p>
+                      {/* Mois encore dus cette année : chaque mois coché produit un reçu */}
+                      <div className="enroll-months" role="group" aria-label={t('form.payment.monthsLabel')}>
+                        {(options?.paiement?.mois ?? []).length === 0 && <p className="db-form-note">{t('form.payment.noMonth')}</p>}
+                        {(options?.paiement?.mois ?? []).map(mois => {
+                          const checked = mois in payment.mensualites
+                          const index = paidMonths.indexOf(mois)
+                          const error = index >= 0 ? (fieldError(`paiement.mensualites.${index}.mois`) || fieldError(`paiement.mensualites.${index}.montant`)) : undefined
+                          return (
+                            <div key={mois} className={`enroll-month ${checked ? 'enroll-month--checked' : ''}`}>
+                              <label>
+                                <input type="checkbox" checked={checked} onChange={event => toggleMonth(mois, event.target.checked)} />
+                                {monthLabel(mois)}
+                              </label>
+                              {checked && (
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min="1"
+                                  step="1"
+                                  required
+                                  aria-label={t('form.payment.amountFor', { month: monthLabel(mois) })}
+                                  aria-invalid={Boolean(error)}
+                                  value={payment.mensualites[mois]}
+                                  onChange={event => setPayment(p => ({ ...p, mensualites: { ...p.mensualites, [mois]: event.target.value } }))}
+                                />
+                              )}
+                              {error && <small className="db-field-error">{error}</small>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {/* Mode de paiement : seulement si quelque chose est encaissé */}
+                      {(feesPaid || paidMonths.length > 0) && (
+                        <div className="db-form-grid">
+                          <SelectField id="field-paiement.mode_paiement" label={requiredLabel(t('pay.form.mode'))} required value={payment.mode_paiement} onChange={event => setPayment(p => ({ ...p, mode_paiement: event.target.value }))} error={fieldError('paiement.mode_paiement')}>
+                            {(options?.paiement?.modes ?? ['especes']).map(mode => <option key={mode} value={mode}>{t(`pay.modes.${mode}`)}</option>)}
+                          </SelectField>
+                        </div>
+                      )}
+                      <p className="enroll-total">{t('form.payment.total')} <strong>{amount(paymentTotal)}</strong></p>
+                    </div>
                   </>
                 )}
               </>
@@ -430,6 +599,7 @@ export default function RecordForm({ kind, options, year, onClose, onSaved, onSe
           </button>
         </div>
       </form>
+      )}
     </dialog>
   )
 }

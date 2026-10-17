@@ -3,12 +3,14 @@ info:
   title: API de gestion du Daara
   version: 1.0.0
   description: >-
-    Contrat cible de l'API REST Laravel. Les erreurs sont en français. L'année
-    scolaire de création est toujours calculée par le serveur; elle n'est jamais
-    fournie par le client. Les ressources élèves et utilisateurs sont archivées,
-    jamais supprimées physiquement.
+    Contrat de l'API REST Laravel (préfixe /api/v1, jeton Bearer Sanctum). Les erreurs
+    sont en français. L'année scolaire (1er octobre → 30 septembre) est toujours
+    calculée par le serveur. Rien n'est supprimé : élèves et comptes sont archivés,
+    reçus et diplômes annulés avec un motif, dépenses rejetées. Les montants (mensualité,
+    frais d'inscription) sont fixés par classe et ne sont jamais saisis à l'inscription.
+    Rôles : admin, oustaz, tuteur (les élèves n'ont pas de compte).
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: http://localhost:8090/api/v1
     description: Développement local
 tags:
   - name: Auth
@@ -19,6 +21,10 @@ tags:
   - name: Planning et présences
   - name: Exemplarité
   - name: Espace tuteur
+  - name: Espace oustaz
+  - name: Paiements
+  - name: Dépenses
+  - name: Diplômes
 security:
   - bearerAuth: []
 paths:
@@ -852,7 +858,14 @@ paths:
           schema: { type: integer, minimum: 1 }
         - name: statut
           in: query
-          schema: { type: string, enum: [brouillon, soumise, validee] }
+          schema: { type: string, enum: [brouillon, validee] }
+        - name: classe_id
+          in: query
+          schema: { type: integer }
+        - name: demande_modification
+          in: query
+          description: Admin. Fiches validées dont l'oustaz demande la réouverture.
+          schema: { type: boolean }
         - name: date_debut
           in: query
           schema: { type: string, format: date }
@@ -875,8 +888,8 @@ paths:
     post:
       tags: [Suivi coranique]
       operationId: createWeeklySheet
-      summary: Créer une fiche hebdomadaire en brouillon
-      description: La période couvre les jours de cours, du samedi au mercredi inclus.
+      summary: Créer une fiche hebdomadaire en brouillon (Oustaz uniquement)
+      description: La période couvre les jours de cours, du samedi au mercredi inclus. L’administration consulte seulement (403).
       requestBody:
         required: true
         content:
@@ -917,7 +930,7 @@ paths:
     get:
       tags: [Suivi coranique]
       operationId: getWeeklySheet
-      summary: Consulter une fiche hebdomadaire
+      summary: Consulter une fiche hebdomadaire (Admin, Oustaz de l’élève)
       responses:
         '200':
           description: Fiche et évaluations quotidiennes
@@ -935,7 +948,7 @@ paths:
     patch:
       tags: [Suivi coranique]
       operationId: updateWeeklySheet
-      summary: Modifier la cible d'une fiche en brouillon
+      summary: Modifier la cible d’une fiche en brouillon (Oustaz)
       requestBody:
         required: true
         content:
@@ -991,42 +1004,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /fiches-hebdomadaires/{ficheId}/soumettre:
-    post:
-      tags: [Suivi coranique]
-      operationId: submitWeeklySheet
-      summary: Soumettre une fiche en brouillon
-      parameters:
-        - name: ficheId
-          in: path
-          required: true
-          schema: { type: integer, minimum: 1 }
-      responses:
-        '200':
-          description: Fiche soumise
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /fiches-hebdomadaires/{ficheId}/valider:
-    post:
-      tags: [Suivi coranique]
-      operationId: validateWeeklySheet
-      summary: Valider une fiche soumise (Admin)
-      parameters:
-        - name: ficheId
-          in: path
-          required: true
-          schema: { type: integer, minimum: 1 }
-      responses:
-        '200':
-          description: Fiche validée
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
 
@@ -1156,7 +1133,10 @@ paths:
           schema: { type: string, pattern: '^\d{4}-\d{2}$' }
       responses:
         '200':
-          description: Gagnant et classement des dossiers dont les trois composantes sont disponibles
+          description: >-
+            gagnant (meilleur des meilleurs), classement général, non_classes (avec les composantes
+            manquantes), classes[] (moyennes des scores et des composantes, premier de la classe,
+            classement interne avec rang_classe, triées par moyenne) et classe_exemplaire.
           content:
             application/json:
               example:
@@ -1234,6 +1214,775 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  # ---------------------------------------------------------------------------
+  # Fiches hebdomadaires : l'oustaz valide, l'administration rouvre
+  # ---------------------------------------------------------------------------
+  /fiches-hebdomadaires/{ficheId}/valider:
+    post:
+      tags: [Suivi coranique]
+      operationId: validateWeeklySheet
+      summary: Valider sa fiche remplie (Oustaz)
+      description: >-
+        Oustaz uniquement (403 pour l'Admin). La fiche en brouillon, avec au moins un jour
+        enregistré, passe à « validee » : elle est figée et compte pour l'Élève du mois.
+      parameters:
+        - $ref: '#/components/parameters/FicheId'
+      responses:
+        '200':
+          description: Fiche validée (données complètes de la fiche, dont valide_par et valide_at)
+          content:
+            application/json:
+              example:
+                message: Fiche hebdomadaire validée.
+                data: { id: 12, statut: validee, valide_par: Cheikh Fall, valide_at: '2026-10-14T18:00:00+00:00' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}/demander-modification:
+    post:
+      tags: [Suivi coranique]
+      operationId: requestWeeklySheetChange
+      summary: Demander la réouverture d'une fiche validée (Oustaz)
+      parameters:
+        - $ref: '#/components/parameters/FicheId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                motif: { type: [string, 'null'], maxLength: 255 }
+      responses:
+        '200':
+          description: Demande enregistrée (modification_demandee_at, motif_demande_modification)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Fiche non validée ou demande déjà en attente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /fiches-hebdomadaires/{ficheId}/autoriser-modification:
+    post:
+      tags: [Suivi coranique]
+      operationId: allowWeeklySheetChange
+      summary: Rouvrir une fiche validée (Admin)
+      description: La fiche repasse en brouillon ; l'oustaz la corrige puis la valide de nouveau.
+      parameters:
+        - $ref: '#/components/parameters/FicheId'
+      responses:
+        '200':
+          description: Fiche rouverte (statut brouillon, modification_autorisee_par, modification_autorisee_at)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------------
+  # Administration : tableau de bord, comptes, recherche de tuteurs, photos
+  # ---------------------------------------------------------------------------
+  /admin/dashboard:
+    get:
+      tags: [Administration - utilisateurs]
+      operationId: getDashboard
+      summary: Indicateurs, liste paginée et options des formulaires (Admin)
+      parameters:
+        - name: section
+          in: query
+          schema: { type: string, enum: [eleves, classes, users], default: eleves }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: annee
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{4}$' }
+        - $ref: '#/components/parameters/IncludeArchived'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: >-
+            stats, items, pagination, activites et options (oustazs, classes actives avec
+            mensualite et frais_inscription appliqués, modes et mois de paiement, inscriptions sans classe).
+            La liste complète des tuteurs n'est plus fournie : utiliser GET /admin/tuteurs.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/tuteurs:
+    get:
+      tags: [Administration - utilisateurs]
+      operationId: searchTutors
+      summary: Rechercher un tuteur actif par prénom, nom ou téléphone (Admin)
+      description: >-
+        20 résultats au plus. Chaque mot doit se retrouver dans le prénom, le nom ou le numéro.
+        « homonyme » signale un autre tuteur actif de même prénom et même nom : le téléphone
+        et les enfants rattachés permettent de choisir le bon compte.
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: exclure_eleve_id
+          in: query
+          description: Écarte les tuteurs déjà rattachés à cet élève.
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Tuteurs trouvés
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 24
+                    user_id: 35
+                    prenom: Moussa
+                    nom: Diop
+                    telephone: '+221771110001'
+                    photo: null
+                    enfants: [Ndeye Diop]
+                    homonyme: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}/photo:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Administration - utilisateurs]
+      operationId: updateUserPhoto
+      summary: Ajouter ou remplacer la photo d'un compte (multipart, champ photo)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhotoUpload'
+      responses:
+        '200':
+          description: Photo enregistrée (URL publique)
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /admin/users/{userId}/reset-password:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Administration - utilisateurs]
+      operationId: resetUserPassword
+      summary: Remettre le mot de passe temporaire « passer » (Admin)
+      description: Sessions fermées, changement imposé à la prochaine connexion. Refusé pour son propre compte.
+      responses:
+        '200':
+          description: Mot de passe réinitialisé
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------------
+  # Élèves : photo, tuteurs, changement de classe, frais d'inscription
+  # ---------------------------------------------------------------------------
+  /eleves/{eleveId}/photo:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: updateStudentPhoto
+      summary: Ajouter ou remplacer la photo d'un élève (multipart, champ photo)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhotoUpload'
+      responses:
+        '200':
+          description: Photo enregistrée ; l'URL est construite sur l'adresse de la requête
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /eleves/{eleveId}/tuteurs:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: attachTutor
+      summary: Rattacher un tuteur existant ou un nouveau compte (mot de passe « passer »)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [existant, creer] }
+                tuteur_id: { type: integer, description: 'Requis avec le mode existant.' }
+                compte:
+                  type: object
+                  description: Requis avec le mode creer (nom, prenom, sexe, telephone, adresse).
+                lien_parente: { type: [string, 'null'], maxLength: 40 }
+                est_responsable_legal: { type: boolean }
+                est_payeur: { type: boolean }
+      responses:
+        '201':
+          description: Tuteur rattaché ; renvoie la fiche de l'élève
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /eleves/{eleveId}/tuteurs/{tuteurId}:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+      - name: tuteurId
+        in: path
+        required: true
+        schema: { type: integer }
+    patch:
+      tags: [Élèves et inscriptions]
+      operationId: updateTutorLink
+      summary: Modifier le rattachement (lien de parenté, responsable légal, payeur)
+      responses:
+        '200':
+          description: Rattachement modifié
+
+  /eleves/{eleveId}/tuteurs/{tuteurId}/retirer:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+      - name: tuteurId
+        in: path
+        required: true
+        schema: { type: integer }
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: detachTutor
+      summary: Retirer un tuteur (l'élève garde au moins un tuteur ; le compte n'est pas touché)
+      responses:
+        '200':
+          description: Tuteur retiré
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /inscriptions-annuelles/{inscriptionId}/changer-classe:
+    parameters:
+      - $ref: '#/components/parameters/InscriptionId'
+    post:
+      tags: [Élèves et inscriptions]
+      operationId: changeClass
+      summary: Transférer l'élève dans une autre classe de la même année (ou affecter une inscription sans classe)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [classe_id]
+              properties:
+                classe_id: { type: integer }
+                motif: { type: [string, 'null'], maxLength: 255 }
+      responses:
+        '200':
+          description: Élève transféré
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /inscriptions-annuelles/{inscriptionId}/frais-inscription:
+    parameters:
+      - $ref: '#/components/parameters/InscriptionId'
+    post:
+      tags: [Paiements]
+      operationId: collectEnrollmentFees
+      summary: Encaisser après coup les frais d'inscription (Admin)
+      description: >-
+        Le montant n'est jamais saisi : c'est celui fixé pour la classe (frais_inscription de la classe,
+        sinon config paiements.frais_inscription_par_defaut). Un reçu INS-AAAA-NNNNNN est émis.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode_paiement]
+              properties:
+                mode_paiement: { $ref: '#/components/schemas/ModePaiement' }
+                date_paiement: { type: string, format: date }
+      responses:
+        '201':
+          description: Reçu des frais d'inscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recu'
+        '422':
+          description: Frais déjà réglés, élève sans classe ou aucun montant fixé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /inscriptions-annuelles/{inscriptionId}/recu:
+    parameters:
+      - $ref: '#/components/parameters/InscriptionId'
+    get:
+      tags: [Paiements]
+      operationId: getEnrollmentFeesReceipt
+      summary: Reçu des frais d'inscription (Admin, ou tuteur rattaché à l'élève)
+      responses:
+        '200':
+          description: Reçu (type inscription)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Recu' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Frais pas encore réglés
+
+  # ---------------------------------------------------------------------------
+  # Paiements (mensualités), tarifs, rappels WhatsApp
+  # ---------------------------------------------------------------------------
+  /paiements:
+    get:
+      tags: [Paiements]
+      operationId: listMonthlyPayments
+      summary: Situation des élèves pour un mois (Admin)
+      parameters:
+        - name: mois
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+        - name: statut
+          in: query
+          schema: { type: string, enum: [paye, partiel, impaye] }
+        - name: classe_id
+          in: query
+          schema: { type: integer }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Indicateurs, lignes (élève, dû, payé, reçus, lien WhatsApp), classes, état des rappels
+    post:
+      tags: [Paiements]
+      operationId: recordMonthlyPayment
+      summary: Enregistrer une mensualité reçue au secrétariat (reçu REC-AAAA-NNNNNN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eleve_id, mois, montant, mode_paiement]
+              properties:
+                eleve_id: { type: integer }
+                mois: { type: string, pattern: '^\d{4}-\d{2}$' }
+                montant: { type: number, minimum: 1 }
+                mode_paiement: { $ref: '#/components/schemas/ModePaiement' }
+                date_paiement: { type: string, format: date }
+                note: { type: [string, 'null'], maxLength: 255 }
+      responses:
+        '201':
+          description: Paiement enregistré
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Recu' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /paiements/tarifs:
+    get:
+      tags: [Paiements]
+      operationId: getFees
+      summary: Mensualité et frais d'inscription de chaque classe de l'année (Admin)
+      responses:
+        '200':
+          description: Tarifs
+          content:
+            application/json:
+              example:
+                data:
+                  annee_scolaire: 2026-2027
+                  defaut: 10000
+                  defaut_frais_inscription: 5000
+                  devise: FCFA
+                  classes:
+                    - { id: 7, nom: Halaqa Al-Falah, niveau: Débutant, mensualite: 8000, mensualite_appliquee: 8000, frais_inscription: null, frais_inscription_appliques: 5000 }
+    put:
+      tags: [Paiements]
+      operationId: updateFees
+      summary: Modifier les montants des classes (null = montant par défaut ; champ absent = inchangé)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tarifs]
+              properties:
+                tarifs:
+                  type: array
+                  items:
+                    type: object
+                    required: [classe_id]
+                    properties:
+                      classe_id: { type: integer }
+                      mensualite: { type: [number, 'null'], minimum: 0 }
+                      frais_inscription: { type: [number, 'null'], minimum: 0 }
+      responses:
+        '200':
+          description: Tarifs enregistrés (les reçus déjà émis ne changent pas)
+
+  /paiements/rappels:
+    get:
+      tags: [Paiements]
+      operationId: listReminders
+      summary: Journal détaillé des rappels WhatsApp d'un mois (Admin)
+      parameters:
+        - name: mois
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+        - name: statut
+          in: query
+          schema: { type: string, enum: [envoye, simule, echec] }
+      responses:
+        '200':
+          description: Rappels (tuteur, téléphone, statut, automatique, envoye_par, message, erreur) et totaux par statut
+    post:
+      tags: [Paiements]
+      operationId: sendReminders
+      summary: Envoyer maintenant les rappels du mois aux parents des élèves non à jour (Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mois]
+              properties:
+                mois: { type: string, pattern: '^\d{4}-\d{2}$' }
+      responses:
+        '200':
+          description: Bilan de l'envoi
+
+  /paiements/{paiementId}/recu:
+    parameters:
+      - $ref: '#/components/parameters/PaiementId'
+    get:
+      tags: [Paiements]
+      operationId: getMonthlyReceipt
+      summary: Reçu d'une mensualité (Admin, ou tuteur rattaché à l'élève)
+      responses:
+        '200':
+          description: Reçu (type mensualite)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Recu' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /paiements/{paiementId}/annuler:
+    parameters:
+      - $ref: '#/components/parameters/PaiementId'
+    post:
+      tags: [Paiements]
+      operationId: cancelMonthlyReceipt
+      summary: Annuler un reçu erroné (motif obligatoire ; le reçu reste visible, marqué annulé)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MotifObligatoire'
+      responses:
+        '200':
+          description: Reçu annulé
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------------
+  # Dépenses
+  # ---------------------------------------------------------------------------
+  /depenses:
+    get:
+      tags: [Dépenses]
+      operationId: listExpenses
+      summary: Dépenses d'une période, recettes, solde et répartition par catégorie (Admin)
+      parameters:
+        - name: mois
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+        - name: annee_scolaire
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{4}$' }
+        - name: statut
+          in: query
+          schema: { type: string, enum: [en_attente, validee, rejetee] }
+        - name: categorie
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Liste paginée et indicateurs (recettes, total validé, solde, en attente, par catégorie)
+    post:
+      tags: [Dépenses]
+      operationId: createExpense
+      summary: Saisir une dépense (statut en_attente)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseRequest'
+      responses:
+        '201':
+          description: Dépense enregistrée
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /depenses/{depenseId}:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    get:
+      tags: [Dépenses]
+      operationId: getExpense
+      summary: Détail d'une dépense
+      responses:
+        '200':
+          description: Dépense
+    patch:
+      tags: [Dépenses]
+      operationId: updateExpense
+      summary: Corriger une dépense en attente (409 si déjà traitée)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseRequest'
+      responses:
+        '200':
+          description: Dépense modifiée
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /depenses/{depenseId}/valider:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    post:
+      tags: [Dépenses]
+      operationId: validateExpense
+      summary: Valider une dépense en attente (comptée dans le solde)
+      responses:
+        '200':
+          description: Dépense validée
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /depenses/{depenseId}/rejeter:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    post:
+      tags: [Dépenses]
+      operationId: rejectExpense
+      summary: Rejeter une dépense en attente (motif obligatoire)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MotifObligatoire'
+      responses:
+        '200':
+          description: Dépense rejetée
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ---------------------------------------------------------------------------
+  # Diplômes
+  # ---------------------------------------------------------------------------
+  /diplomes:
+    get:
+      tags: [Diplômes]
+      operationId: listDiplomas
+      summary: Diplômes délivrés, recherche et indicateurs (Admin)
+      parameters:
+        - name: q
+          in: query
+          description: Élève (nom, prénom, matricule), numéro ou intitulé
+          schema: { type: string, maxLength: 120 }
+        - name: statut
+          in: query
+          schema: { type: string, enum: [delivre, annule] }
+        - name: annee_scolaire
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{4}$' }
+        - name: eleve_id
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: items (Diplome + élève), pagination, stats (delivres, annee_courante, annules), types, mentions
+
+  /eleves/{eleveId}/diplomes:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Diplômes]
+      operationId: deliverDiploma
+      summary: Délivrer un diplôme à un élève (numéro DIP-AAAA-NNNNNN, Admin)
+      description: Intitulé vide = intitulé par défaut du type. La classe actuelle de l'élève est conservée sur le diplôme.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiplomeRequest'
+            example:
+              type: hifz_complet
+              mention: excellent
+              date_obtention: '2026-10-12'
+      responses:
+        '201':
+          description: Diplôme délivré
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Diplome' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /diplomes/{diplomeId}:
+    parameters:
+      - $ref: '#/components/parameters/DiplomeId'
+    get:
+      tags: [Diplômes]
+      operationId: getDiploma
+      summary: Diplôme à imprimer (Admin, ou tuteur de l'élève tant qu'il n'est pas annulé)
+      responses:
+        '200':
+          description: Diplôme
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Diplome' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Diplômes]
+      operationId: updateDiploma
+      summary: Corriger un diplôme non annulé (le numéro ne change pas)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiplomeRequest'
+      responses:
+        '200':
+          description: Diplôme modifié
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /diplomes/{diplomeId}/annuler:
+    parameters:
+      - $ref: '#/components/parameters/DiplomeId'
+    post:
+      tags: [Diplômes]
+      operationId: cancelDiploma
+      summary: Annuler un diplôme erroné (motif obligatoire ; jamais supprimé)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MotifObligatoire'
+      responses:
+        '200':
+          description: Diplôme annulé
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------------
+  # Exemplarité d'une classe, espaces Tuteur et Oustaz
+  # ---------------------------------------------------------------------------
+  /classes/{classeId}/exemplarite:
+    parameters:
+      - $ref: '#/components/parameters/ClassId'
+    get:
+      tags: [Exemplarité]
+      operationId: getClassExemplarite
+      summary: Élèves de la classe, évaluation du mois et score (Admin, Oustaz de la classe)
+      parameters:
+        - name: mois
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+      responses:
+        '200':
+          description: criteres, eleves[] (evaluation ou null, score)
+
+  /tuteur/me/eleves:
+    get:
+      tags: [Espace tuteur]
+      operationId: myChildren
+      summary: Enfants du tuteur connecté (inscriptions avec classe, diplômes non annulés)
+      responses:
+        '200':
+          description: Enfants
+
+  /tuteur/me/paiements:
+    get:
+      tags: [Espace tuteur]
+      operationId: myMonthlyPayments
+      summary: Mensualités de l'année pour chaque enfant (payé, partiel, impayé, à venir)
+      responses:
+        '200':
+          description: Mensualités
+
+  /tuteur/me/recus:
+    get:
+      tags: [Espace tuteur]
+      operationId: myReceipts
+      summary: Tous les reçus des enfants (frais d'inscription et mensualités), du plus récent au plus ancien
+      description: Le détail de chaque reçu s'obtient avec GET /paiements/{id}/recu ou /inscriptions-annuelles/{id}/recu.
+      responses:
+        '200':
+          description: Reçus
+          content:
+            application/json:
+              example:
+                data:
+                  total_paye: 15000
+                  devise: FCFA
+                  recus:
+                    - { type: inscription, id: 102, numero_recu: INS-2026-000102, date_paiement: '2026-10-07', libelle: Frais d’inscription 2026-2027, montant: 5000, mode_paiement: especes, annule: false }
+                    - { type: mensualite, id: 340, numero_recu: REC-2026-000340, date_paiement: '2026-10-07', mois: '2026-10', libelle: Mensualité de octobre 2026, montant: 10000, mode_paiement: wave, annule: false }
+
+  /oustaz/me/classes:
+    get:
+      tags: [Espace oustaz]
+      operationId: myClasses
+      summary: Classes de l'oustaz connecté et leurs élèves (avec photo)
+      responses:
+        '200':
+          description: Classes
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1262,6 +2011,31 @@ components:
       schema:
         type: integer
         minimum: 1
+    FicheId:
+      name: ficheId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    InscriptionId:
+      name: inscriptionId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    PaiementId:
+      name: paiementId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    DepenseId:
+      name: depenseId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    DiplomeId:
+      name: diplomeId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
     IncludeArchived:
       name: include_archived
       in: query
@@ -1456,6 +2230,30 @@ components:
                 type: boolean
               est_payeur:
                 type: boolean
+        photo:
+          type: string
+          format: binary
+          description: En multipart/form-data uniquement (JPG, PNG, WEBP, 2 Mo).
+        paiement:
+          type: [object, 'null']
+          description: >-
+            Encaissement dans la même transaction. frais_inscription = true encaisse le montant
+            fixé pour la classe (reçu INS-… renvoyé dans data.recu_inscription) ; chaque mensualité
+            produit un reçu REC-… (data.recus). Un montant numérique pour les frais est refusé.
+          required: [mode_paiement]
+          properties:
+            mode_paiement: { $ref: '#/components/schemas/ModePaiement' }
+            date_paiement: { type: string, format: date }
+            frais_inscription: { type: boolean }
+            mensualites:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                required: [mois, montant]
+                properties:
+                  mois: { type: string, pattern: '^\d{4}-\d{2}$' }
+                  montant: { type: number, minimum: 1 }
     UpdateStudentRequest:
       type: object
       minProperties: 1
@@ -1505,6 +2303,14 @@ components:
         oustaz_id:
           type: integer
           minimum: 1
+        mensualite:
+          type: [number, 'null']
+          minimum: 0
+          description: Vide = mensualité par défaut.
+        frais_inscription:
+          type: [number, 'null']
+          minimum: 0
+          description: Vide = frais d'inscription par défaut.
     UpdateClassRequest:
       type: object
       minProperties: 1
@@ -1521,6 +2327,14 @@ components:
         oustaz_id:
           type: integer
           minimum: 1
+        mensualite:
+          type: [number, 'null']
+          minimum: 0
+          description: Vide = mensualité par défaut.
+        frais_inscription:
+          type: [number, 'null']
+          minimum: 0
+          description: Vide = frais d'inscription par défaut.
     QuranMarker:
       type: object
       additionalProperties: false
@@ -1535,8 +2349,8 @@ components:
       required: [eleve_id, date_debut, date_fin, sourate_debut_id, verset_debut, sourate_fin_id, verset_fin]
       properties:
         eleve_id: { type: integer, minimum: 1 }
-        date_debut: { type: string, format: date, description: Samedi }
-        date_fin: { type: string, format: date, description: Vendredi suivant }
+        date_debut: { type: string, format: date, description: 'Samedi' }
+        date_fin: { type: string, format: date, description: 'Vendredi suivant' }
         sourate_debut_id: { type: integer, minimum: 1, maximum: 114 }
         verset_debut: { type: integer, minimum: 1 }
         sourate_fin_id: { type: integer, minimum: 1, maximum: 114 }
@@ -1611,6 +2425,94 @@ components:
         motif:
           type: [string, 'null']
           maxLength: 255
+    PhotoUpload:
+      type: object
+      required: [photo]
+      properties:
+        photo:
+          type: string
+          format: binary
+          description: JPG, PNG ou WEBP, 2 Mo au plus.
+    ModePaiement:
+      type: string
+      enum: [especes, wave, orange_money, virement, cheque]
+    MotifObligatoire:
+      type: object
+      required: [motif]
+      properties:
+        motif: { type: string, minLength: 3, maxLength: 255 }
+    Recu:
+      type: object
+      description: Reçu imprimable d'une mensualité (REC-…) ou des frais d'inscription (INS-…).
+      properties:
+        type: { type: string, enum: [mensualite, inscription] }
+        id: { type: integer, description: 'Id du paiement (mensualité) ou de l''inscription (frais).' }
+        numero_recu: { type: string, example: INS-2026-000102 }
+        date_paiement: { type: string, format: date }
+        mois: { type: [string, 'null'], description: 'AAAA-MM pour une mensualité, null pour les frais.' }
+        libelle: { type: string, example: Frais d’inscription 2026-2027 }
+        annee_scolaire: { type: string }
+        eleve:
+          type: object
+          properties:
+            id: { type: integer }
+            matricule: { type: string }
+            nom: { type: string }
+            prenom: { type: string }
+        classe: { type: [string, 'null'] }
+        tuteur: { type: [string, 'null'], description: 'Payeur à prévenir.' }
+        montant: { type: number }
+        montant_du: { type: number }
+        total_paye_mois: { type: number }
+        reste: { type: number }
+        mode_paiement: { $ref: '#/components/schemas/ModePaiement' }
+        encaisse_par: { type: [string, 'null'] }
+        devise: { type: string, example: FCFA }
+        annule: { type: boolean }
+        motif_annulation: { type: [string, 'null'] }
+    DepenseRequest:
+      type: object
+      required: [categorie, montant, date_depense]
+      properties:
+        categorie: { type: string, description: 'Voir les catégories renvoyées par GET /depenses.' }
+        montant: { type: number, minimum: 1 }
+        date_depense: { type: string, format: date }
+        beneficiaire: { type: [string, 'null'], maxLength: 120 }
+        mode_paiement: { $ref: '#/components/schemas/ModePaiement' }
+        description: { type: [string, 'null'], maxLength: 1000 }
+    DiplomeRequest:
+      type: object
+      required: [type, date_obtention]
+      properties:
+        type: { type: string, enum: [hifz_complet, hifz_partiel, fin_cycle, tajwid, autre] }
+        intitule: { type: [string, 'null'], maxLength: 160 }
+        mention: { type: [string, 'null'], enum: [passable, assez_bien, bien, tres_bien, excellent, null] }
+        date_obtention: { type: string, format: date, description: 'Pas dans le futur ; détermine l''année scolaire.' }
+        observations: { type: [string, 'null'], maxLength: 1000 }
+    Diplome:
+      type: object
+      properties:
+        id: { type: integer }
+        numero: { type: string, example: DIP-2026-000004 }
+        type: { type: string }
+        intitule: { type: string }
+        mention: { type: [string, 'null'] }
+        date_obtention: { type: string, format: date }
+        annee_scolaire: { type: string }
+        classe: { type: [string, 'null'] }
+        observations: { type: [string, 'null'] }
+        annule: { type: boolean }
+        eleve:
+          type: object
+          properties:
+            id: { type: integer }
+            matricule: { type: string }
+            nom: { type: string }
+            prenom: { type: string }
+            photo: { type: [string, 'null'] }
+            date_naissance: { type: [string, 'null'], format: date }
+        delivre_par: { type: [string, 'null'] }
+        motif_annulation: { type: [string, 'null'] }
     ErrorResponse:
       type: object
       required: [message]
@@ -1719,7 +2621,7 @@ components:
               items:
                 type: object
                 properties:
-                  statut: { type: string, enum: [brouillon, soumise, validee] }
+                  statut: { type: string, enum: [brouillon, validee] }
                   notes:
                     type: array
                     items:

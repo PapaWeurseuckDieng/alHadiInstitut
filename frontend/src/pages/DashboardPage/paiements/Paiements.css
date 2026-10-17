@@ -447,6 +447,37 @@
   box-shadow: 0 0 0 3px rgba(15, 81, 50, 0.14);
 }
 
+/* Tarifs : mensualité et frais d'inscription côte à côte */
+.pay-tarif--double {
+  grid-template-columns: minmax(0, 1fr) 200px 200px;
+}
+
+.pay-tarif-name strong,
+.pay-tarif-name small {
+  display: block;
+}
+
+.pay-tarif-field {
+  display: grid;
+  gap: 4px;
+}
+
+.pay-tarif-field label {
+  color: var(--db-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .pay-tarif--double {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pay-tarif--double .pay-tarif-name {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---------- Espace tuteur ---------- */
 
 .pay-tuteur {
@@ -605,4 +636,75 @@
   .pay-tuteur-list {
     padding: 0 16px 16px;
   }
+}
+
+/* ---------- Journal détaillé des rappels WhatsApp ---------- */
+
+.pay-journal-open {
+  margin-top: 8px;
+}
+
+.db-dialog.pay-journal {
+  width: min(820px, calc(100vw - 32px));
+}
+
+.pay-journal-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.pay-journal-list li {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+}
+
+.pay-journal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pay-journal-head small {
+  display: block;
+  color: var(--db-subtle);
+}
+
+.pay-journal-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pay-journal-list summary {
+  cursor: pointer;
+  color: var(--db-green);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.pay-journal-message {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--db-line-soft);
+  white-space: pre-line;
+  font-size: 0.875rem;
+}
+
+/* Espace tuteur : reçus déjà émis */
+.pay-receipt--cancelled td {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.pay-receipt--cancelled .db-badge {
+  text-decoration: none;
 }

@@ -1,24 +1,30 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
+import { useDialogs } from '../../components/Dialogs/dialogsContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher/LanguageSwitcher'
 import { translate } from '../../i18n/i18n'
 import { useI18n } from '../../i18n/useI18n'
-import { getToken } from '../../services/authService'
+import { getToken, getUtilisateur } from '../../services/authService'
 import { annulerPaiement, getRecu } from '../../services/paiementsService'
 import { montantEnLettres } from '../../utils/montantEnLettres'
 import { usePaymentFormat } from '../DashboardPage/paiements/usePaymentFormat'
 import './RecuPage.css'
 
 /**
- * Reçu de paiement imprimable (/recus/:id), format A5.
+ * Reçu imprimable, format A5 : mensualité (/recus/:id) ou frais d'inscription (/recus/inscription/:id).
+ * Ouvert par l'administration ou par le tuteur de l'élève (espace tuteur).
  * « Imprimer / Enregistrer en PDF » ouvre la fenêtre d'impression du navigateur :
  * choisir l'imprimante, ou « Enregistrer au format PDF ».
- * Un administrateur peut annuler un reçu erroné (motif obligatoire).
+ * Un administrateur peut annuler le reçu erroné d'une mensualité (motif obligatoire, confirmation).
+ *
+ * @param {{ type?: 'mensualite'|'inscription' }} props
  */
-export default function RecuPage() {
+export default function RecuPage({ type = 'mensualite' }) {
   const { id } = useParams()
   const { t, formatDate, serverMessage } = useI18n()
+  const { confirm } = useDialogs()
+  const admin = getUtilisateur()?.role === 'admin'
   const { amount, monthLabel } = usePaymentFormat()
   const [recu, setRecu] = useState(null)
   const [error, setError] = useState('')
@@ -31,11 +37,11 @@ export default function RecuPage() {
   useEffect(() => {
     if (!token) return
     let cancelled = false
-    getRecu(id)
+    getRecu(id, type)
       .then(data => { if (!cancelled) setRecu(data) })
       .catch(err => { if (!cancelled) setError(err.status === 404 ? t('pay.receipt.notFound') : (err.status ? serverMessage(err.message, err.status) : err.message)) })
     return () => { cancelled = true }
-  }, [id, token, t, serverMessage])
+  }, [id, type, token, t, serverMessage])
 
   // Titre de l'onglet (et nom proposé pour le PDF) : numéro du reçu
   useEffect(() => {
@@ -47,6 +53,13 @@ export default function RecuPage() {
 
   async function cancelReceipt(event) {
     event.preventDefault()
+    const ok = await confirm({
+      title: t('pay.receipt.cancelConfirmTitle', { numero: recu.numero_recu }),
+      message: t('pay.receipt.cancelHelp'),
+      confirmLabel: t('pay.receipt.cancelConfirm'),
+      tone: 'danger',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const response = await annulerPaiement(recu.id, motif.trim())
@@ -70,7 +83,7 @@ export default function RecuPage() {
         </Link>
         <div className="recu-toolbar-end">
           <LanguageSwitcher />
-          {recu && !recu.annule && (
+          {admin && recu && recu.type !== 'inscription' && !recu.annule && (
             <button type="button" className="db-button db-button--secondary recu-cancel-btn" onClick={() => setCancelOpen(open => !open)}>
               {t('pay.receipt.cancel')}
             </button>
@@ -131,12 +144,20 @@ export default function RecuPage() {
             <div><dt>{t('pay.receipt.student')}</dt><dd>{recu.eleve ? `${recu.eleve.prenom} ${recu.eleve.nom}` : '—'}</dd></div>
             <div><dt>{t('pay.receipt.matricule')}</dt><dd><bdi>{recu.eleve?.matricule ?? '—'}</bdi></dd></div>
             <div><dt>{t('pay.receipt.class')}</dt><dd>{recu.classe ?? '—'}</dd></div>
-            <div><dt>{t('pay.receipt.month')}</dt><dd>{monthLabel(recu.mois)}</dd></div>
-            <div><dt>{t('pay.receipt.mode')}</dt><dd>{t(`pay.modes.${recu.mode_paiement}`)}</dd></div>
+            {recu.type === 'inscription'
+              ? <div><dt>{t('pay.receipt.object')}</dt><dd>{t('pay.receipt.fees', { year: recu.annee_scolaire })}</dd></div>
+              : <div><dt>{t('pay.receipt.month')}</dt><dd>{monthLabel(recu.mois)}</dd></div>}
+            <div><dt>{t('pay.receipt.mode')}</dt><dd>{recu.mode_paiement ? t(`pay.modes.${recu.mode_paiement}`) : '—'}</dd></div>
             {recu.tuteur && <div><dt>{t('pay.receipt.tutor')}</dt><dd>{recu.tuteur}</dd></div>}
-            <div><dt>{t('pay.receipt.due')}</dt><dd className="recu-money">{amount(recu.montant_du)}</dd></div>
-            <div><dt>{t('pay.receipt.totalMonth')}</dt><dd className="recu-money">{amount(recu.total_paye_mois)}</dd></div>
-            <div className="recu-rest"><dt>{t('pay.receipt.remaining')}</dt><dd className="recu-money">{amount(recu.reste)}</dd></div>
+            {recu.type === 'inscription' ? (
+              <div className="recu-rest"><dt>{t('pay.receipt.feesFixed')}</dt><dd className="recu-money">{amount(recu.montant_du)}</dd></div>
+            ) : (
+              <>
+                <div><dt>{t('pay.receipt.due')}</dt><dd className="recu-money">{amount(recu.montant_du)}</dd></div>
+                <div><dt>{t('pay.receipt.totalMonth')}</dt><dd className="recu-money">{amount(recu.total_paye_mois)}</dd></div>
+                <div className="recu-rest"><dt>{t('pay.receipt.remaining')}</dt><dd className="recu-money">{amount(recu.reste)}</dd></div>
+              </>
+            )}
             {recu.note && <div><dt>{t('pay.receipt.note')}</dt><dd>{recu.note}</dd></div>}
             {recu.encaisse_par && <div><dt>{t('pay.receipt.cashier')}</dt><dd>{recu.encaisse_par}</dd></div>}
           </dl>

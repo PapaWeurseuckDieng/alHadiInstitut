@@ -87,9 +87,7 @@ final class Mensualites
     /** Mensualité due pour une inscription : tarif de la classe, sinon tarif par défaut. */
     public static function montantDu(Inscription $inscription): float
     {
-        $tarif = $inscription->classeAcademique?->mensualite;
-
-        return (float) ($tarif ?? config('paiements.mensualite_par_defaut'));
+        return $inscription->classeAcademique?->mensualiteAppliquee() ?? (float) config('paiements.mensualite_par_defaut');
     }
 
     /** Statut d'une mensualité selon ce qui est dû et ce qui est payé. */
