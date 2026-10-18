@@ -27,7 +27,9 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    // Réponse à la requête préalable (OPTIONS) mise en cache par le navigateur : une seule par adresse
+    // toutes les 2 heures au lieu d'une avant chaque appel à l'API.
+    'max_age' => (int) env('CORS_MAX_AGE', 7200),
 
     'supports_credentials' => false,
 

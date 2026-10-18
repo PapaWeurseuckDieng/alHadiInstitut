@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ModePaiement;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\AuditEvent;
@@ -9,9 +10,10 @@ use App\Models\ClasseAcademique;
 use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\Oustaz;
-use App\Models\Tuteur;
 use App\Models\User;
+use App\Services\PhotoProfil;
 use App\Support\AnneeScolaire;
+use App\Support\Mensualites;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -75,6 +77,11 @@ class DashboardController extends Controller
                     'annee_scolaire' => $record->annee_scolaire, 'statut' => $record->statut,
                     'is_archived' => $record->is_archived,
                     'effectif' => $record->inscriptions_count,
+                    'oustaz_id' => $record->oustaz_id,
+                    'mensualite' => $record->mensualiteAppliquee(),
+                    'frais_inscription' => $record->fraisInscriptionAppliques(),
+                    'mensualite_propre' => $record->mensualite !== null,
+                    'frais_inscription_propres' => $record->frais_inscription !== null,
                     'oustaz' => trim(($record->oustaz?->user?->prenom ?? '').' '.($record->oustaz?->user?->nom ?? '')),
                 ];
             }
@@ -82,6 +89,7 @@ class DashboardController extends Controller
             return [
                 'id' => $record->id, 'matricule' => $record->matricule,
                 'nom' => $record->nom, 'prenom' => $record->prenom, 'statut' => $record->statut,
+                'photo' => PhotoProfil::url($record->photo),
                 'is_archived' => $record->is_archived,
                 'inscriptions' => $record->inscriptions->map(fn ($i) => [
                     'id' => $i->id, 'annee_scolaire' => $i->annee_scolaire,
@@ -112,15 +120,26 @@ class DashboardController extends Controller
             'items' => $items,
             'pagination' => ['page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total()],
             'options' => [
-                'tuteurs' => Tuteur::with('user')->whereHas('user', fn ($q) => $q
-                    ->where('statut', 'actif')->where('is_archived', false)->where('role', 'tuteur'))
-                    ->get()->map($profileOptions),
                 'oustazs' => Oustaz::with('user')->whereHas('user', fn ($q) => $q
                     ->where('statut', 'actif')->where('is_archived', false)->where('role', 'oustaz'))
                     ->get()->map($profileOptions),
+                // Montants appliqués (ceux de la classe, sinon les montants par défaut) : affichés, jamais saisis
                 'classes' => ClasseAcademique::where('annee_scolaire', AnneeScolaire::courante())
                     ->where('statut', 'active')->where('is_archived', false)->orderBy('nom')
-                    ->get(['id', 'nom', 'niveau', 'annee_scolaire']),
+                    ->get(['id', 'nom', 'niveau', 'annee_scolaire', 'mensualite', 'frais_inscription'])
+                    ->map(fn (ClasseAcademique $classe) => [
+                        'id' => $classe->id, 'nom' => $classe->nom, 'niveau' => $classe->niveau,
+                        'annee_scolaire' => $classe->annee_scolaire,
+                        'mensualite' => $classe->mensualiteAppliquee(),
+                        'frais_inscription' => $classe->fraisInscriptionAppliques(),
+                    ]),
+                // Paiement saisi dans le formulaire d'inscription : modes et mois encore dus cette année
+                'paiement' => [
+                    'modes' => collect(ModePaiement::cases())->map->value,
+                    'mois' => collect(Mensualites::moisDeLAnnee(AnneeScolaire::courante()))
+                        ->filter(fn (string $mois) => $mois >= Mensualites::moisCourant())->values(),
+                    'devise' => config('paiements.devise'),
+                ],
                 'inscriptions' => Inscription::with('eleve')->where('statut', 'active')->where('is_archived', false)
                     ->whereNull('classe_academique_id')->whereHas('eleve', fn ($q) => $q->where('is_archived', false))->get()->map(fn ($i) => [
                         'id' => $i->id, 'annee_scolaire' => $i->annee_scolaire,

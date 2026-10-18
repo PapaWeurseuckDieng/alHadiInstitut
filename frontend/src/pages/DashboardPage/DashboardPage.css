@@ -790,6 +790,58 @@
   gap: 12px;
 }
 
+/* Nom cliquable : ouvre la fiche de détail */
+.db-person-link {
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border: 0;
+  border-radius: 10px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.db-person-link:hover strong,
+.db-person-link:focus-visible strong {
+  color: var(--db-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.db-person-link:focus-visible {
+  outline: 3px solid rgba(15, 81, 50, 0.3);
+}
+
+/* Diplômes d'un enfant (espace tuteur) */
+.db-diplomas {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.db-diplomas li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--db-gold-soft);
+  border-radius: 10px;
+  background: #fffbeb;
+}
+
+.db-diplomas li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #92400e;
+  font-weight: 600;
+}
+
 .db-avatar {
   display: inline-flex;
   flex: none;
@@ -802,6 +854,14 @@
   color: var(--db-green);
   font-size: 0.8125rem;
   font-weight: 700;
+  overflow: hidden;
+}
+
+/* Photo de profil à la place des initiales */
+.db-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .db-avatar--square {
@@ -1793,4 +1853,208 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ==========================================================================
+   Inscription : paiement saisi dans le formulaire, reçus à imprimer
+   ========================================================================== */
+
+.enroll-payment {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--db-line);
+  border-radius: var(--db-radius);
+  background: var(--db-line-soft);
+}
+
+.enroll-fees {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  background: var(--db-surface);
+  cursor: pointer;
+}
+
+.enroll-fees--checked {
+  border-color: var(--db-green);
+  background: var(--db-green-soft);
+}
+
+.enroll-fees input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--db-green);
+}
+
+.enroll-fees span {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+}
+
+.enroll-fees small {
+  color: var(--db-muted);
+}
+
+.enroll-fees-amount {
+  color: var(--db-green);
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.enroll-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.enroll-month {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  background: var(--db-surface);
+}
+
+.enroll-month--checked {
+  border-color: var(--db-green);
+  background: var(--db-green-soft);
+}
+
+.enroll-month label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.enroll-month input[type='number'] {
+  width: 100%;
+  min-height: 38px;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--db-line);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.enroll-month input[aria-invalid='true'] {
+  border-color: var(--db-red);
+}
+
+.enroll-total {
+  margin: 0;
+  text-align: end;
+}
+
+.enroll-receipts {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.enroll-receipts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+}
+
+.enroll-receipts li span {
+  display: grid;
+  gap: 0.15rem;
+  text-transform: none;
+}
+
+.enroll-receipts small {
+  color: var(--db-subtle);
+}
+
+/* Boutons d'action d'une ligne de tableau (photo, réinitialisation…) */
+.db-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.db-button--small {
+  min-height: 34px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8125rem;
+}
+
+
+/* Raccourcis de l'Oustaz, au-dessus de ses classes */
+.db-oustaz-shortcuts {
+  margin-bottom: 20px;
+}
+
+/* Case « Afficher les archivés » de la barre d'outils des listes */
+.db-archives-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Bouton « Voir la progression » d'une carte d'enfant (tuteur) */
+.db-record-action {
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* Onglets des rubriques regroupées (Finances, Pédagogie) */
+.db-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  background: var(--db-surface);
+  overflow-x: auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.db-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--db-muted);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.db-tab:hover {
+  background: var(--db-line-soft);
+}
+
+.db-tab--active,
+.db-tab--active:hover {
+  background: var(--db-green);
+  color: #ffffff;
 }

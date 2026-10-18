@@ -20,7 +20,21 @@ const paths = {
   chevronRight: 'M9 6l6 6-6 6',
   receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6',
   settings: 'M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 5v4 M8 15v4',
+  // Photos, comptes, dépenses
+  camera: 'M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M15.5 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0',
+  image: 'M3 4h18v16H3z M3 16l5-5 4 4 3-3 6 6 M16 9h.01',
+  key: 'M14.5 9.5a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0 M13.2 12.7L21 20.5 M17.5 17l2-2 M15 14.5l2-2',
+  pencil: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
+  expense: 'M12 3v12 M7 10l5 5 5-5 M4 20h16',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
+  // Menus d'actions, diplômes, fiches
+  dots: 'M12 5h.01 M12 12h.01 M12 19h.01',
+  award: 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12 M8.2 13.6L7 22l5-3 5 3-1.2-8.4',
+  unlock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 7.5-2',
+  lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
+  trophy: 'M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M7 6H4v2a3 3 0 0 0 3 3 M17 6h3v2a3 3 0 0 1-3 3',
+  eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
 }
 export default function Icon({ name, size = 20 }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.book} /></svg>
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={name === 'dots' ? 3 : 1.65} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.book} /></svg>
 }

@@ -10,6 +10,14 @@ async function login(page, telephone = '770990001', secret = password) {
   await expect(page).toHaveURL(/tableau-de-bord/)
 }
 
+/** Choisit un tuteur existant par la recherche (nom, prénom ou téléphone) puis le résultat voulu. */
+async function chooseTuteur(scope, query, name) {
+  await scope.getByLabel('Compte du tuteur').selectOption('existant')
+  await scope.getByRole('combobox', { name: /Tuteur actif/ }).fill(query)
+  await scope.getByRole('option', { name: new RegExp(name) }).click()
+  await expect(scope.getByText(name, { exact: true })).toBeVisible()
+}
+
 test('une visite sans session revient à la connexion', async ({ page }) => {
   await page.goto('/tableau-de-bord')
   await expect(page).toHaveURL(/login/)
@@ -31,7 +39,7 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
   await page.getByLabel('Effacer la recherche').click()
   await expect(page.getByText('12 élève(s) · Page 1 / 2')).toBeVisible()
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Comptes & accès' }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Comptes', exact: true }).click()
   await expect(page.getByRole('table')).toBeVisible()
   await page.getByRole('button', { name: 'Créer un compte', exact: true }).click()
   let dialog = page.getByRole('dialog')
@@ -57,7 +65,7 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
   await expect(dialog.getByRole('alert')).toBeVisible()
   await dialog.getByRole('button', { name: 'Annuler' }).click()
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Élèves & inscriptions' }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Élèves', exact: true }).click()
   await expect(page.getByRole('table')).toBeVisible()
   await page.getByRole('button', { name: 'Inscrire un élève', exact: true }).click()
   dialog = page.getByRole('dialog')
@@ -65,11 +73,18 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
   await dialog.getByLabel(/^Nom/).first().fill('TestBrowser')
   await dialog.getByLabel('Sexe *').first().selectOption('M')
   await dialog.getByLabel('Classe *').selectOption({ label: 'Halaqa Al-Falah · Intermédiaire' })
-  await dialog.getByLabel('Compte du tuteur').selectOption('existant')
-  await dialog.getByLabel('Tuteur actif', { exact: false }).selectOption({ label: 'Aminata Fall · +221770990003' })
+  // Recherche par le nom : le téléphone distingue les homonymes
+  await chooseTuteur(dialog, 'Fall', 'Aminata Fall')
+  // Frais d'inscription : montant fixé pour la classe, cochés par défaut, jamais saisis
+  await expect(dialog.getByLabel('Frais d’inscription payés maintenant')).toBeChecked()
+  await expect(dialog.getByRole('spinbutton', { name: /Frais/ })).toHaveCount(0)
   const enrollment = page.waitForResponse(r => r.url().endsWith('/v1/eleves') && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click()
-  expect((await enrollment).status()).toBe(201)
+  const enrollmentResponse = await enrollment
+  expect(enrollmentResponse.status()).toBe(201)
+  expect((await enrollmentResponse.json()).data.recu_inscription.numero_recu).toMatch(/^INS-/)
+  await expect(dialog.getByRole('link', { name: 'Imprimer le reçu des frais' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Terminer' }).click()
   await expect(dialog).not.toBeVisible()
   await expect(page.getByRole('table').getByText('Nouveau TestBrowser')).toBeVisible()
   await expect(page.getByRole('status').filter({ hasText: 'Matricule : ELV-' })).toBeVisible()
@@ -88,8 +103,10 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
   await guardianOne.getByLabel('Adresse', { exact: true }).fill('Dakar')
   await dialog.getByRole('button', { name: 'Ajouter un tuteur' }).click()
   const guardianTwo = dialog.getByRole('group', { name: 'Tuteur 2', exact: true })
-  await guardianTwo.getByLabel('Compte du tuteur').selectOption('existant')
-  await guardianTwo.getByLabel('Tuteur actif', { exact: false }).selectOption({ label: 'Seynabou TestBrowser · +221770990010' })
+  // Recherche par le téléphone
+  await chooseTuteur(guardianTwo, '990010', 'Seynabou TestBrowser')
+  // Sans frais d'inscription : la fenêtre se ferme directement
+  await dialog.getByLabel('Frais d’inscription payés maintenant').uncheck()
   const multipleGuardians = page.waitForResponse(r => r.url().endsWith('/v1/eleves') && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click()
   const multipleResponse = await multipleGuardians
@@ -101,7 +118,7 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
   await expect(dialog).not.toBeVisible()
   await expect(page.getByRole('table').getByText('LienMultiple TestBrowser')).toBeVisible()
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Classes académiques' }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Classes', exact: true }).click()
   await expect(page.getByRole('table')).toBeVisible()
   await page.getByRole('button', { name: 'Créer une classe', exact: true }).click()
   dialog = page.getByRole('dialog')
@@ -124,8 +141,9 @@ test('la direction consulte, recherche et crée les dossiers via la vraie API', 
 test('un tuteur ne voit que ses élèves et ne peut pas lire le tableau direction', async ({ page, request }) => {
   await login(page, '770990003')
   await expect(page.getByRole('heading', { name: 'Mes élèves', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Awa Sarr', exact: true })).toBeVisible()
-  await expect(page.getByRole('navigation').getByText('Comptes & accès')).toHaveCount(0)
+  // « Awa Sarr » apparaît aussi dans le bloc Mensualités : on cible la liste « Mes élèves »
+  await expect(page.getByRole('region', { name: 'Mes élèves' }).getByRole('heading', { name: 'Awa Sarr', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation').getByText('Comptes', { exact: true })).toHaveCount(0)
   const token = await page.evaluate(() => localStorage.getItem('alhadi.auth.token'))
   const response = await request.get(`${api}/v1/admin/dashboard`, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
   expect(response.status()).toBe(403)
@@ -163,8 +181,8 @@ test('navigation et formulaire sont utilisables sur mobile sans débordement', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('dashboard-mobile.png'), fullPage: true })
   await page.getByLabel('Ouvrir le menu').click()
-  await page.getByRole('navigation').getByRole('button', { name: 'Classes académiques' }).click()
-  await expect(page.getByRole('heading', { name: 'Classes académiques', exact: true }).first()).toBeVisible()
+  await page.getByRole('navigation').getByRole('button', { name: 'Classes', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Classes', exact: true }).first()).toBeVisible()
   await page.getByRole('button', { name: 'Créer une classe', exact: true }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('form-mobile.png'), fullPage: true })

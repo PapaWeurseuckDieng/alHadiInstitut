@@ -5,25 +5,82 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:8090/api/v1" },
-    { "key": "admin_phone", "value": "+221770000001" },
-    { "key": "admin_temp_password", "value": "passer" },
-    { "key": "admin_password", "value": "Daara!Admin2026" },
-    { "key": "admin_token", "value": "" },
-    { "key": "temp_token", "value": "" },
-    { "key": "tuteur_phone", "value": "" },
-    { "key": "tuteur_profile_id", "value": "" },
-    { "key": "tuteur_temp_token", "value": "" },
-    { "key": "tuteur_password", "value": "Tuteur!Secure2026" },
-    { "key": "tuteur_token", "value": "" },
-    { "key": "oustaz_phone", "value": "" },
-    { "key": "oustaz_profile_id", "value": "" },
-    { "key": "oustaz_temp_token", "value": "" },
-    { "key": "oustaz_password", "value": "Oustaz!Secure2026" },
-    { "key": "oustaz_token", "value": "" },
-    { "key": "inscription_id", "value": "" },
-    { "key": "eleve_id", "value": "" },
-    { "key": "classe_id", "value": "" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:8090/api/v1"
+    },
+    {
+      "key": "admin_phone",
+      "value": "+221770000001"
+    },
+    {
+      "key": "admin_temp_password",
+      "value": "passer"
+    },
+    {
+      "key": "admin_password",
+      "value": "Daara!Admin2026"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "temp_token",
+      "value": ""
+    },
+    {
+      "key": "tuteur_phone",
+      "value": ""
+    },
+    {
+      "key": "tuteur_profile_id",
+      "value": ""
+    },
+    {
+      "key": "tuteur_temp_token",
+      "value": ""
+    },
+    {
+      "key": "tuteur_password",
+      "value": "Tuteur!Secure2026"
+    },
+    {
+      "key": "tuteur_token",
+      "value": ""
+    },
+    {
+      "key": "oustaz_phone",
+      "value": ""
+    },
+    {
+      "key": "oustaz_profile_id",
+      "value": ""
+    },
+    {
+      "key": "oustaz_temp_token",
+      "value": ""
+    },
+    {
+      "key": "oustaz_password",
+      "value": "Oustaz!Secure2026"
+    },
+    {
+      "key": "oustaz_token",
+      "value": ""
+    },
+    {
+      "key": "inscription_id",
+      "value": ""
+    },
+    {
+      "key": "eleve_id",
+      "value": ""
+    },
+    {
+      "key": "classe_id",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -51,11 +108,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{admin_phone}}\",\n  \"password\": \"{{admin_temp_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
@@ -67,29 +133,42 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{temp_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{temp_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "url": "{{base_url}}/auth/me"
           }
         },
         {
-          "name": "Changer le mot de passe temporaire Admin (204)",
+          "name": "Changer le mot de passe temporaire Admin (200)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.unset('temp_token');"
                 ]
               }
@@ -97,15 +176,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{temp_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{temp_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"new_password\": \"{{admin_password}}\",\n  \"new_password_confirmation\": \"{{admin_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/change-password"
           }
@@ -132,11 +226,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{admin_phone}}\",\n  \"password\": \"{{admin_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
@@ -180,17 +283,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nom\": \"DIOP\",\n  \"prenom\": \"Fatou\",\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"adresse\": \"Dakar\",\n  \"role\": \"tuteur\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/admin/users"
           }
@@ -228,17 +347,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nom\": \"NDIAYE\",\n  \"prenom\": \"Moussa\",\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"role\": \"oustaz\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/admin/users"
           }
@@ -267,17 +402,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"eleve\": {\n    \"nom\": \"SARR\",\n    \"prenom\": \"Awa\",\n    \"date_naissance\": \"2017-04-12\",\n    \"sexe\": \"F\",\n    \"adresse\": \"Dakar\"\n  },\n  \"inscription\": {\n    \"annee_scolaire\": \"2026-2027\",\n    \"date_inscription\": \"2026-10-01\"\n  },\n  \"tuteurs\": [\n    {\n      \"mode\": \"existant\",\n      \"tuteur_id\": {{tuteur_profile_id}},\n      \"lien_parente\": \"mere\",\n      \"est_responsable_legal\": true,\n      \"est_payeur\": true\n    }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/eleves"
           }
@@ -314,17 +465,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nom\": \"{{classe_nom}}\",\n  \"niveau\": \"Intermédiaire\",\n  \"annee_scolaire\": \"2026-2027\",\n  \"oustaz_id\": {{oustaz_profile_id}},\n  \"inscription_ids\": [{{inscription_id}}]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/classes"
           }
@@ -355,24 +522,33 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"password\": \"passer\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
         },
         {
-          "name": "Changer le mot de passe du Tuteur (204)",
+          "name": "Changer le mot de passe du Tuteur (200)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.unset('tuteur_temp_token');"
                 ]
               }
@@ -380,15 +556,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{tuteur_temp_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tuteur_temp_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"new_password\": \"{{tuteur_password}}\",\n  \"new_password_confirmation\": \"{{tuteur_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/change-password"
           }
@@ -413,11 +604,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{tuteur_phone}}\",\n  \"password\": \"{{tuteur_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
@@ -429,24 +629,42 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{tuteur_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tuteur_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nom\": \"TEST\",\n  \"prenom\": \"Refus\",\n  \"telephone\": \"+221700000000\",\n  \"role\": \"oustaz\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/admin/users"
           }
@@ -470,10 +688,21 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{tuteur_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tuteur_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "url": "{{base_url}}/tuteur/me/eleves"
           }
@@ -498,24 +727,33 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"password\": \"passer\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
         },
         {
-          "name": "Changer le mot de passe de l’Oustaz (204)",
+          "name": "Changer le mot de passe de l’Oustaz (200)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));",
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.unset('oustaz_temp_token');"
                 ]
               }
@@ -523,15 +761,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{oustaz_temp_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{oustaz_temp_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"new_password\": \"{{oustaz_password}}\",\n  \"new_password_confirmation\": \"{{oustaz_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/change-password"
           }
@@ -556,11 +809,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telephone\": \"{{oustaz_phone}}\",\n  \"password\": \"{{oustaz_password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/auth/login"
           }
@@ -584,10 +846,21 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{oustaz_token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{oustaz_token}}",
+                  "type": "string"
+                }
+              ]
             },
             "url": "{{base_url}}/oustaz/me/classes"
           }

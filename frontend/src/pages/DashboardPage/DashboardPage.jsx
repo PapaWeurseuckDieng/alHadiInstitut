@@ -1,26 +1,59 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import ActionMenu from '../../components/ActionMenu/ActionMenu'
+import Avatar from '../../components/Avatar'
+import { useDialogs } from '../../components/Dialogs/dialogsContext'
 import Icon from '../../components/Icon'
 import LanguageSwitcher from '../../components/LanguageSwitcher/LanguageSwitcher'
 import { useI18n } from '../../i18n/useI18n'
 import { clearSession, getCurrentUser, getToken, getUtilisateur, logout } from '../../services/authService'
-import { getDashboard, getMyRecords } from '../../services/dashboardService'
+import { archiveEleve, archiveUser, getDashboard, getMyRecords, resetPassword } from '../../services/dashboardService'
+import PhotoDialog from './PhotoDialog'
 import RecordForm from './RecordForm'
 import PaymentsSection from './paiements/PaymentsSection'
 import TuteurPaiements from './paiements/TuteurPaiements'
 import './DashboardPage.css'
+
+// Rubriques et fenêtres chargées à la demande : un tuteur ne télécharge pas l'espace pédagogique
+const ClasseDetail = lazy(() => import('./details/ClasseDetail'))
+const EleveDetail = lazy(() => import('./details/EleveDetail'))
+const SyntheseDialog = lazy(() => import('./details/SyntheseDialog'))
+const UserDetail = lazy(() => import('./details/UserDetail'))
+const DepensesSection = lazy(() => import('./depenses/DepensesSection'))
+const DiplomesSection = lazy(() => import('./diplomes/DiplomesSection'))
+const EleveDuMoisSection = lazy(() => import('./pedagogie/EleveDuMoisSection'))
+const Pedagogie = lazy(() => import('./pedagogie/Pedagogie'))
 
 /* ==========================================================================
    Configuration
    Les textes sont dans src/i18n/fr.js et src/i18n/ar.js (clés « dash.… »).
    ========================================================================== */
 
-// Rubriques du menu (dans l'ordre) et leur icône
-const SECTION_KEYS = ['overview', 'eleves', 'classes', 'paiements', 'users']
-const SECTION_ICONS = { overview: 'dashboard', eleves: 'users', classes: 'book', paiements: 'wallet', users: 'shield' }
+// Menu de l'administration : 6 rubriques ; Finances et Pédagogie se détaillent en onglets
+const ADMIN_KEYS = ['overview', 'eleves', 'classes', 'finances', 'pedagogie', 'users']
+const ADMIN_TABS = {
+  finances: ['paiements', 'depenses'],
+  pedagogie: ['suivi', 'eleveDuMois', 'exemplarite', 'appel', 'planning', 'diplomes'],
+}
+// Espace pédagogique : Oustaz (ses classes, une rubrique par activité) et Admin (onglets)
+const PEDAGOGY_KEYS = ['suivi', 'appel', 'planning', 'exemplarite']
+const SECTION_ICONS = {
+  overview: 'dashboard', eleves: 'users', classes: 'book', finances: 'wallet', pedagogie: 'star', users: 'shield',
+  paiements: 'wallet', depenses: 'expense', suivi: 'book', appel: 'check', planning: 'calendar', exemplarite: 'shield', eleveDuMois: 'star', diplomes: 'award',
+}
 
-// Liste chargée par le tableau de bord pour chaque rubrique (« paiements » a ses propres données)
-const listFor = section => (section === 'overview' || section === 'paiements' ? 'eleves' : section)
+// Rubriques qui chargent leurs propres données (pas la liste du tableau de bord)
+const OWN_DATA_SECTIONS = ['finances', 'pedagogie', 'paiements', 'depenses', 'eleveDuMois', 'diplomes', ...PEDAGOGY_KEYS]
+
+/** Rubriques du menu selon le rôle. */
+function menuKeys(role) {
+  if (role === 'admin') return ADMIN_KEYS
+  if (role === 'oustaz') return ['overview', ...PEDAGOGY_KEYS]
+  return ['overview']
+}
+
+// Liste chargée par le tableau de bord pour chaque rubrique
+const listFor = section => (section === 'overview' || OWN_DATA_SECTIONS.includes(section) ? 'eleves' : section)
 
 // Formulaire de création associé à chaque liste
 const LIST_FORMS = { eleves: 'eleve', classes: 'classe', users: 'user' }
@@ -42,9 +75,6 @@ const ACTIVITY_KEYS = { 'user.created': 'userCreated', 'eleve.enrolled': 'eleveE
 /** « Prénom Nom » d'une personne. */
 const fullName = record => `${record.prenom} ${record.nom}`
 
-/** Initiales pour les pastilles d'avatar, ex. « AF ». */
-const initials = record => `${record?.prenom?.[0] || ''}${record?.nom?.[0] || ''}`.toUpperCase()
-
 /* ==========================================================================
    Petits composants d'affichage
    ========================================================================== */
@@ -60,9 +90,10 @@ function EmptyState({ title, description }) {
   )
 }
 
-/** Pastille de statut : « Actif » en vert, sinon la valeur brute en gris. */
-function StatusBadge({ value }) {
+/** Pastille de statut : « Archivé », « Actif » en vert, sinon la valeur brute en gris. */
+function StatusBadge({ value, archived = false }) {
   const { t } = useI18n()
+  if (archived) return <span className="db-badge db-badge--neutral"><span className="db-badge-dot" />{t('details.archived')}</span>
   const active = value === 'actif' || value === 'active'
   return (
     <span className={`db-badge ${active ? 'db-badge--success' : 'db-badge--neutral'}`}>
@@ -72,16 +103,26 @@ function StatusBadge({ value }) {
   )
 }
 
-/** Avatar à initiales suivi du nom et d'une ligne secondaire (matricule...). */
-function PersonCell({ record }) {
-  return (
-    <div className="db-person">
-      <span className="db-avatar" aria-hidden="true">{initials(record)}</span>
+/**
+ * Photo (ou initiales) suivie du nom et d'une ligne secondaire (matricule...).
+ * Avec onOpen, toute la cellule est un bouton qui ouvre la fiche de détail.
+ */
+function PersonCell({ record, onOpen, secondary }) {
+  const { t } = useI18n()
+  const content = (
+    <>
+      <Avatar person={record} />
       <span>
         <strong>{fullName(record)}</strong>
-        <small><bdi>{record.matricule}</bdi></small>
+        <small>{secondary ?? <bdi>{record.matricule}</bdi>}</small>
       </span>
-    </div>
+    </>
+  )
+  if (!onOpen) return <div className="db-person">{content}</div>
+  return (
+    <button type="button" className="db-person db-person-link" onClick={onOpen} aria-label={t('details.openFor', { name: fullName(record) })}>
+      {content}
+    </button>
   )
 }
 
@@ -98,7 +139,7 @@ function ArrowIcon({ size = 16 }) {
    ========================================================================== */
 
 /** Liste des élèves et de leurs inscriptions. */
-function ElevesTable({ records }) {
+function ElevesTable({ records, actions }) {
   const { t } = useI18n()
   return (
     <table>
@@ -109,12 +150,13 @@ function ElevesTable({ records }) {
           <th>{t('dash.table.classYear')}</th>
           <th>{t('dash.table.tutors')}</th>
           <th>{t('dash.table.status')}</th>
+          <th>{t('dash.table.actions')}</th>
         </tr>
       </thead>
       <tbody>
         {records.map(eleve => (
           <tr key={eleve.id}>
-            <td data-label={t('dash.table.student')}><PersonCell record={eleve} /></td>
+            <td data-label={t('dash.table.student')}><PersonCell record={eleve} onOpen={() => actions.onDetail('eleve', eleve)} /></td>
             <td data-label={t('dash.table.classYear')}>
               <div>
                 {eleve.inscriptions.length
@@ -138,7 +180,17 @@ function ElevesTable({ records }) {
                   : <span className="db-muted-text">{t('dash.table.noTutor')}</span>}
               </div>
             </td>
-            <td data-label={t('dash.table.status')}><StatusBadge value={eleve.statut} /></td>
+            <td data-label={t('dash.table.status')}><StatusBadge value={eleve.statut} archived={eleve.is_archived} /></td>
+            <td data-label={t('dash.table.actions')}>
+              <ActionMenu
+                label={t('actions.for', { name: fullName(eleve) })}
+                items={[
+                  { key: 'detail', label: t('actions.openStudent'), icon: 'eye', onSelect: () => actions.onDetail('eleve', eleve) },
+                  { key: 'photo', label: t('photo.dialogTitle'), icon: 'camera', hidden: eleve.is_archived, onSelect: () => actions.onPhoto('eleve', eleve) },
+                  { key: 'archive', label: t('details.archive'), icon: 'close', danger: true, hidden: eleve.is_archived, onSelect: () => actions.onArchive('eleve', eleve) },
+                ]}
+              />
+            </td>
           </tr>
         ))}
       </tbody>
@@ -147,7 +199,7 @@ function ElevesTable({ records }) {
 }
 
 /** Liste des classes académiques. */
-function ClassesTable({ records }) {
+function ClassesTable({ records, actions }) {
   const { t } = useI18n()
   return (
     <table>
@@ -159,22 +211,32 @@ function ClassesTable({ records }) {
           <th>{t('dash.table.schoolYear')}</th>
           <th>{t('dash.table.size')}</th>
           <th>{t('dash.table.status')}</th>
+          <th>{t('dash.table.actions')}</th>
         </tr>
       </thead>
       <tbody>
         {records.map(classe => (
           <tr key={classe.id}>
             <td data-label={t('dash.table.classLevel')}>
-              <div className="db-person">
+              <button type="button" className="db-person db-person-link" onClick={() => actions.onDetail('classe', classe)} aria-label={t('details.openFor', { name: classe.nom })}>
                 <span className="db-avatar db-avatar--square" aria-hidden="true"><Icon name="book" size={18} /></span>
                 <span><strong>{classe.nom}</strong><small>{classe.niveau}</small></span>
-              </div>
+              </button>
             </td>
             <td data-label={t('dash.table.oustazShort')}>{classe.oustaz || <span className="db-muted-text">{t('dash.table.notProvided')}</span>}</td>
             <td data-label={t('dash.table.yearShort')}>{classe.annee_scolaire}</td>
             {/* Le texte « N élèves » est vérifié par les tests e2e : ne pas le modifier. */}
             <td data-label={t('dash.table.size')}><span><span className="db-count">{classe.effectif}</span> {t('dash.table.studentsSuffix')}</span></td>
-            <td data-label={t('dash.table.status')}><StatusBadge value={classe.statut} /></td>
+            <td data-label={t('dash.table.status')}><StatusBadge value={classe.statut} archived={classe.is_archived} /></td>
+            <td data-label={t('dash.table.actions')}>
+              <ActionMenu
+                label={t('actions.for', { name: classe.nom })}
+                items={[
+                  { key: 'detail', label: t('actions.openClass'), icon: 'eye', onSelect: () => actions.onDetail('classe', classe) },
+                  { key: 'edit', label: t('details.edit'), icon: 'pencil', hidden: classe.is_archived, onSelect: () => actions.onDetail('classe', classe, 'edit') },
+                ]}
+              />
+            </td>
           </tr>
         ))}
       </tbody>
@@ -183,7 +245,7 @@ function ClassesTable({ records }) {
 }
 
 /** Liste des comptes utilisateurs. */
-function UsersTable({ records }) {
+function UsersTable({ records, actions }) {
   const { t } = useI18n()
   return (
     <table>
@@ -195,12 +257,13 @@ function UsersTable({ records }) {
           <th>{t('dash.table.phone')}</th>
           <th>{t('dash.table.access')}</th>
           <th>{t('dash.table.status')}</th>
+          <th>{t('dash.table.actions')}</th>
         </tr>
       </thead>
       <tbody>
         {records.map(account => (
           <tr key={account.id}>
-            <td data-label={t('dash.table.user')}><PersonCell record={account} /></td>
+            <td data-label={t('dash.table.user')}><PersonCell record={account} onOpen={() => actions.onDetail('user', account)} /></td>
             <td data-label={t('dash.table.role')}>{t(`dash.roleLabels.${account.role}`)}</td>
             {/* dir="ltr" : « +221… » ne doit pas être inversé en arabe */}
             <td data-label={t('dash.table.phone')} className="db-nowrap"><span dir="ltr">{account.telephone}</span></td>
@@ -209,7 +272,19 @@ function UsersTable({ records }) {
                 ? <span className="db-badge db-badge--attention"><span className="db-badge-dot" />{t('dash.table.mustChange')}</span>
                 : <span className="db-badge db-badge--success"><span className="db-badge-dot" />{t('dash.table.configured')}</span>}
             </td>
-            <td data-label={t('dash.table.status')}><StatusBadge value={account.statut} /></td>
+            <td data-label={t('dash.table.status')}><StatusBadge value={account.statut} archived={account.is_archived} /></td>
+            <td data-label={t('dash.table.actions')}>
+              {/* Son propre compte : ni réinitialisation ni archivage (refusés par le serveur) */}
+              <ActionMenu
+                label={t('actions.for', { name: fullName(account) })}
+                items={[
+                  { key: 'detail', label: t('actions.openAccount'), icon: 'eye', onSelect: () => actions.onDetail('user', account) },
+                  { key: 'photo', label: t('photo.dialogTitle'), icon: 'camera', hidden: account.is_archived, onSelect: () => actions.onPhoto('user', account) },
+                  { key: 'reset', label: actions.resettingId === account.id ? t('users.reset.running') : t('users.reset.button'), icon: 'key', disabled: actions.resettingId === account.id, hidden: account.is_archived || account.id === actions.currentUserId, onSelect: () => actions.onReset(account) },
+                  { key: 'archive', label: t('details.archive'), icon: 'close', danger: true, hidden: account.is_archived || account.id === actions.currentUserId, onSelect: () => actions.onArchive('user', account) },
+                ]}
+              />
+            </td>
           </tr>
         ))}
       </tbody>
@@ -218,10 +293,10 @@ function UsersTable({ records }) {
 }
 
 /** Choisit le tableau correspondant à la rubrique. */
-function RecordsTable({ section, records }) {
-  if (section === 'classes') return <ClassesTable records={records} />
-  if (section === 'users') return <UsersTable records={records} />
-  return <ElevesTable records={records} />
+function RecordsTable({ section, records, actions }) {
+  if (section === 'classes') return <ClassesTable records={records} actions={actions} />
+  if (section === 'users') return <UsersTable records={records} actions={actions} />
+  return <ElevesTable records={records} actions={actions} />
 }
 
 /* ==========================================================================
@@ -229,9 +304,8 @@ function RecordsTable({ section, records }) {
    ========================================================================== */
 
 /** Menu latéral : logo, rubriques et utilisateur connecté (tiroir sur mobile). */
-function Sidebar({ user, admin, section, menuOpen, onSelect }) {
+function Sidebar({ user, section, menuOpen, onSelect }) {
   const { t } = useI18n()
-  const keys = admin ? SECTION_KEYS : ['overview']
 
   return (
     <aside className={`db-sidebar ${menuOpen ? 'db-sidebar--open' : ''}`}>
@@ -245,7 +319,7 @@ function Sidebar({ user, admin, section, menuOpen, onSelect }) {
 
       <nav aria-label={t('dash.menu.nav')}>
         <p className="db-nav-label">{t('dash.menu.label')}</p>
-        {keys.map(key => (
+        {menuKeys(user?.role).map(key => (
           <button
             key={key}
             type="button"
@@ -261,7 +335,7 @@ function Sidebar({ user, admin, section, menuOpen, onSelect }) {
 
       {/* Utilisateur connecté */}
       <div className="db-user-card">
-        <span className="db-avatar db-avatar--gold" aria-hidden="true">{initials(user)}</span>
+        <Avatar person={user} className="db-avatar--gold" />
         <span>
           <strong>{user ? fullName(user) : t('dash.menu.account')}</strong>
           <small>{user?.role ? t(`dash.roleLabels.${user.role}`) : ''}</small>
@@ -435,7 +509,7 @@ function ActivityFeed({ data, loading, error }) {
  * Liste paginée de la rubrique (élèves, classes ou comptes) :
  * en-tête, recherche, tableau et pagination.
  */
-function RecordsPanel({ overview, tableSection, data, loading, error, search, draft, page, onDraftChange, onSearch, onClearSearch, onPrevious, onNext, onCreate, year }) {
+function RecordsPanel({ overview, tableSection, data, loading, error, search, draft, page, onDraftChange, onSearch, onClearSearch, onPrevious, onNext, onCreate, year, actions, archives, onToggleArchives }) {
   const { t } = useI18n()
   // Raccourci vers les textes de la liste courante, ex. list('create') -> « Inscrire un élève »
   const list = (key, params) => t(`dash.lists.${tableSection}.${key}`, params)
@@ -449,7 +523,7 @@ function RecordsPanel({ overview, tableSection, data, loading, error, search, dr
   } else if (data?.items.length) {
     body = (
       <>
-        <div className="db-table-scroll"><RecordsTable section={tableSection} records={data.items} /></div>
+        <div className="db-table-scroll"><RecordsTable section={tableSection} records={data.items} actions={actions} /></div>
         <div className="db-pagination">
           {/* Texte vérifié par les tests e2e, ex. « 12 élève(s) · Page 1 / 2 » */}
           <span>{list('count', { total: data.pagination.total, page: data.pagination.page, last: data.pagination.last_page })}</span>
@@ -512,6 +586,11 @@ function RecordsPanel({ overview, tableSection, data, loading, error, search, dr
         // Rubrique : le titre de page suffit, recherche et création sur une seule ligne
         <div className="db-toolbar db-toolbar--top">
           {searchForm}
+          {/* Dossiers archivés : masqués par défaut, consultables par l'administration */}
+          <label className="db-archives-toggle">
+            <input type="checkbox" checked={archives} onChange={event => onToggleArchives(event.target.checked)} />
+            {t('details.showArchived')}
+          </label>
           {createButton}
         </div>
       )}
@@ -526,7 +605,29 @@ function RecordsPanel({ overview, tableSection, data, loading, error, search, dr
    ========================================================================== */
 
 /** Élèves du tuteur ou classes de l'oustaz, sous forme de cartes. */
-function PersonalRecords({ user, records, loading, error }) {
+/** Raccourcis de l'Oustaz vers l'espace pédagogique. */
+function OustazShortcuts({ onSelect }) {
+  const { t } = useI18n()
+  return (
+    <section className="db-panel db-quick-actions db-oustaz-shortcuts" aria-labelledby="db-oustaz-title">
+      <div className="db-panel-heading">
+        <h2 id="db-oustaz-title">{t('dash.quick.title')}</h2>
+      </div>
+      {PEDAGOGY_KEYS.map(key => (
+        <button key={key} type="button" className="db-action" onClick={() => onSelect(key)}>
+          <span className="db-action-icon"><Icon name={SECTION_ICONS[key]} /></span>
+          <span className="db-action-text">
+            <strong>{t(`dash.sections.${key}`)}</strong>
+            <small>{t(`dash.sectionIntros.${key}`)}</small>
+          </span>
+          <ArrowIcon size={17} />
+        </button>
+      ))}
+    </section>
+  )
+}
+
+function PersonalRecords({ user, records, loading, error, onOpenSynthese }) {
   const { t } = useI18n()
   const tuteur = user?.role === 'tuteur'
 
@@ -541,7 +642,7 @@ function PersonalRecords({ user, records, loading, error }) {
           <article key={record.id} className="db-record-card">
             <header>
               {tuteur
-                ? <span className="db-avatar db-avatar--large" aria-hidden="true">{initials(record)}</span>
+                ? <Avatar person={record} className="db-avatar--large" />
                 : <span className="db-avatar db-avatar--large db-avatar--square" aria-hidden="true"><Icon name="book" /></span>}
               <div>
                 <h3>{tuteur ? fullName(record) : record.nom}</h3>
@@ -552,20 +653,43 @@ function PersonalRecords({ user, records, loading, error }) {
 
             {tuteur ? (
               // Inscriptions de l'élève, par année scolaire
-              <ul>
-                {record.inscriptions.map(inscription => (
-                  <li key={inscription.id}>
-                    <span>{t('dash.personal.year', { year: inscription.annee_scolaire })}</span>
-                    <StatusBadge value={inscription.statut} />
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul>
+                  {record.inscriptions.map(inscription => (
+                    <li key={inscription.id}>
+                      <span>{t('dash.personal.year', { year: inscription.annee_scolaire })}{inscription.classe ? ` · ${inscription.classe}` : ''}</span>
+                      <StatusBadge value={inscription.statut} />
+                    </li>
+                  ))}
+                </ul>
+                {/* Diplômes délivrés : imprimables dans un nouvel onglet */}
+                {record.diplomes?.length > 0 && (
+                  <ul className="db-diplomas">
+                    {record.diplomes.map(diplome => (
+                      <li key={diplome.id}>
+                        <span><Icon name="award" size={16} />{diplome.intitule}</span>
+                        <a className="db-text-button" href={`/diplomes/${diplome.id}`} target="_blank" rel="noopener noreferrer" aria-label={t('dip.printFor', { title: diplome.intitule })}>
+                          <Icon name="printer" size={15} />{t('dip.print')}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* Progression : récitation, présences, comportement, fiches */}
+                <button type="button" className="db-button db-button--secondary db-record-action" onClick={() => onOpenSynthese(record)} aria-label={t('synth.openFor', { name: fullName(record) })}>
+                  <Icon name="book" size={16} />{t('synth.open')}
+                </button>
+              </>
             ) : (
               // Élèves affectés à la classe
               <ul>
                 {record.eleves.map(eleve => (
                   <li key={eleve.id}>
-                    <span>{fullName(eleve)}<small><bdi>{eleve.matricule}</bdi></small></span>
+                    {/* Photo de l'élève : aide l'oustaz à reconnaître chacun (appel) */}
+                    <span className="db-person">
+                      <Avatar person={eleve} />
+                      <span>{fullName(eleve)}<small><bdi>{eleve.matricule}</bdi></small></span>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -596,6 +720,7 @@ function PersonalRecords({ user, records, loading, error }) {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { t, formatDate, serverMessage } = useI18n()
+  const { confirm, alert } = useDialogs()
   const [user, setUser] = useState(getUtilisateur)
   const [verified, setVerified] = useState(false)
   const [section, setSection] = useState('overview')
@@ -611,11 +736,24 @@ export default function DashboardPage() {
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState('')
   const [form, setForm] = useState(null)
+  // Fenêtre « Changer la photo » : { kind: 'eleve'|'user', record }
+  const [photoTarget, setPhotoTarget] = useState(null)
+  // Compte dont le mot de passe est en cours de réinitialisation
+  const [resettingId, setResettingId] = useState(null)
+  // Fiche de détail ouverte : { kind: 'eleve'|'user'|'classe', record } ; synthèse d'un enfant (tuteur)
+  const [detail, setDetail] = useState(null)
+  const [synthese, setSynthese] = useState(null)
+  // Listes : inclure les dossiers archivés
+  const [archives, setArchives] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const token = getToken()
   const passwordRequired = user?.must_change_password
   const admin = user?.role === 'admin'
+  // Onglet ouvert dans chaque rubrique regroupée de l'administration
+  const [tabs, setTabs] = useState({ finances: 'paiements', pedagogie: 'suivi' })
+  // Vue réellement affichée : l'onglet choisi pour Finances / Pédagogie, sinon la rubrique elle-même
+  const view = admin && ADMIN_TABS[section] ? tabs[section] : section
   // Le tableau de bord administrateur affiche la liste des élèves
   const tableSection = listFor(section)
 
@@ -638,7 +776,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!verified || passwordRequired) return
     let cancelled = false
-    const request = admin ? getDashboard({ section: tableSection, q: search, annee: year, page }) : getMyRecords(user.role)
+    const request = admin ? getDashboard({ section: tableSection, q: search, annee: year, page, archives }) : getMyRecords(user.role)
     request.then(response => {
       if (cancelled) return
       if (admin) setData(response)
@@ -651,7 +789,7 @@ export default function DashboardPage() {
       else { setError({ message: err.message, status: err.status }); setLoading(false) }
     })
     return () => { cancelled = true }
-  }, [verified, passwordRequired, admin, user?.role, tableSection, search, year, page, revision, navigate])
+  }, [verified, passwordRequired, admin, user?.role, tableSection, search, year, page, archives, revision, navigate])
 
   // 3. Menu mobile ouvert : la touche Échap le referme
   useEffect(() => {
@@ -689,6 +827,66 @@ export default function DashboardPage() {
     setNotice(message); setPage(1); refresh()
   }
 
+  /** Réinitialise le mot de passe d'un compte (« passer »), après confirmation. */
+  async function resetAccount(account) {
+    const ok = await confirm({
+      title: t('users.reset.confirmTitle', { name: `${account.prenom} ${account.nom}` }),
+      message: t('users.reset.confirmText'),
+      confirmLabel: t('users.reset.button'),
+      tone: 'warning',
+    })
+    if (!ok) return
+    setResettingId(account.id)
+    try {
+      const response = await resetPassword(account.id)
+      setNotice(`${serverMessage(response.message, 200, { fallback: 'original' })} ${t('users.reset.done', { name: `${account.prenom} ${account.nom}` })}`)
+      refresh()
+    } catch (err) {
+      if (err.status === 401) { sessionExpired(); return }
+      const detail = err.errors?.user?.[0]
+      await alert({ title: t('dialogs.failed'), message: serverMessage(detail || err.message, err.status || 0, { fallback: 'original' }), tone: 'danger' })
+    } finally {
+      setResettingId(null)
+    }
+  }
+
+  /** Archive un élève ou un compte depuis la liste : fenêtre de confirmation avec motif facultatif. */
+  async function archiveRecord(kind, record) {
+    const name = `${record.prenom} ${record.nom}`
+    const motif = await confirm({
+      title: t(`actions.archiveTitle.${kind}`, { name }),
+      message: t(kind === 'eleve' ? 'details.eleve.archiveHelp' : 'details.user.archiveHelp'),
+      confirmLabel: t(`details.${kind === 'eleve' ? 'eleve' : 'user'}.submit.archive`),
+      tone: 'danger',
+      input: { label: t('details.reason'), placeholder: t('details.reasonPlaceholder') },
+    })
+    if (motif === false) return
+    try {
+      const response = kind === 'eleve' ? await archiveEleve(record.id, motif) : await archiveUser(record.id, motif)
+      setNotice(serverMessage(response.message, 200, { fallback: 'original' }))
+      refresh()
+    } catch (err) {
+      if (err.status === 401) { sessionExpired(); return }
+      await alert({ title: t('dialogs.failed'), message: serverMessage(Object.values(err.errors || {})[0]?.[0] || err.message, err.status || 0, { fallback: 'original' }), tone: 'danger' })
+    }
+  }
+
+  // Actions des lignes de tableau (menu « ⋮ ») ; mode : 'edit' ouvre directement la modification
+  const rowActions = {
+    currentUserId: user?.id,
+    resettingId,
+    onPhoto: (kind, record) => setPhotoTarget({ kind, record }),
+    onReset: resetAccount,
+    onArchive: archiveRecord,
+    onDetail: (kind, record, mode) => setDetail({ kind, record, mode }),
+  }
+
+  /** Ouvre la fiche d'un élève depuis une autre fiche (classe…) : « Fermer » revient à la fiche d'origine. */
+  const openEleveFrom = previous => eleve => setDetail({ kind: 'eleve', record: eleve, from: previous })
+
+  /** Modification faite depuis une fiche de détail : message + liste rechargée, la fiche reste ouverte. */
+  function detailChanged(message) { setNotice(message); refresh() }
+
   // Recherche dans la liste
   function submitSearch(event) {
     event.preventDefault(); setSearch(draft.trim()); setPage(1); setLoading(true); setRevision(r => r + 1)
@@ -713,7 +911,7 @@ export default function DashboardPage() {
       {/* Voile derrière le menu ouvert sur mobile */}
       {menuOpen && <button type="button" className="db-menu-backdrop" aria-label={t('dash.menu.close')} onClick={() => setMenuOpen(false)} />}
 
-      <Sidebar user={user} admin={admin} section={section} menuOpen={menuOpen} onSelect={selectSection} />
+      <Sidebar user={user} section={section} menuOpen={menuOpen} onSelect={selectSection} />
 
       <div className="db-workspace">
         <Topbar
@@ -739,13 +937,13 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <h1>{t(`dash.sections.${section}`)}</h1>
-                  <p>{t(`dash.sectionIntros.${section}`)}</p>
+                  <p>{t(`dash.sectionIntros.${view}`)}</p>
                 </>
               )}
             </div>
 
             <div className="db-page-tools">
-              {admin && !passwordRequired && section !== 'paiements' && (
+              {admin && !passwordRequired && !OWN_DATA_SECTIONS.includes(section) && (
                 <div className="db-year">
                   <label htmlFor="dashboard-year">{t('dash.year.label')}</label>
                   <select id="dashboard-year" value={year} onChange={changeYear}>
@@ -759,6 +957,24 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
+
+          {/* ---------- Onglets d'une rubrique regroupée (Finances, Pédagogie) ---------- */}
+          {admin && ADMIN_TABS[section] && (
+            <div className="db-tabs" role="tablist" aria-label={t(`dash.sections.${section}`)}>
+              {ADMIN_TABS[section].map(key => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === key}
+                  className={`db-tab ${view === key ? 'db-tab--active' : ''}`}
+                  onClick={() => { setTabs(previous => ({ ...previous, [section]: key })); setNotice('') }}
+                >
+                  <Icon name={SECTION_ICONS[key]} size={17} />{t(`dash.sections.${key}`)}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* ---------- Messages ---------- */}
           {notice && (
@@ -777,7 +993,8 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ---------- Contenu ---------- */}
+          {/* ---------- Contenu (rubriques chargées à la demande : Suspense) ---------- */}
+          <Suspense fallback={<div className="db-loading" role="status"><span className="db-spinner" />{t('dash.loadingData')}</div>}>
           {passwordRequired ? (
             <>
               <div className="db-panel">
@@ -785,9 +1002,29 @@ export default function DashboardPage() {
               </div>
               <RecordForm kind="password" onClose={signOut} onSaved={saved} onSessionExpired={sessionExpired} />
             </>
-          ) : admin && section === 'paiements' ? (
+          ) : admin && view === 'paiements' ? (
             // Rubrique Paiements : données et fenêtres propres (voir paiements/PaymentsSection.jsx)
             <PaymentsSection refreshKey={revision} onNotice={setNotice} onSessionExpired={sessionExpired} />
+          ) : admin && view === 'depenses' ? (
+            // Rubrique Dépenses : données et fenêtres propres (voir depenses/DepensesSection.jsx)
+            <DepensesSection refreshKey={revision} onNotice={setNotice} onSessionExpired={sessionExpired} />
+          ) : admin && view === 'eleveDuMois' ? (
+            <EleveDuMoisSection
+              refreshKey={revision}
+              onSessionExpired={sessionExpired}
+              onOpenEleve={eleve => setDetail({ kind: 'eleve', record: eleve })}
+              onOpenClasse={classe => setDetail({ kind: 'classe', record: classe })}
+            />
+          ) : admin && view === 'diplomes' ? (
+            <DiplomesSection
+              refreshKey={revision}
+              onNotice={setNotice}
+              onSessionExpired={sessionExpired}
+              onOpenEleve={eleve => setDetail({ kind: 'eleve', record: eleve })}
+            />
+          ) : (admin || user?.role === 'oustaz') && PEDAGOGY_KEYS.includes(view) ? (
+            // Espace pédagogique : suivi coranique, appel, planning, exemplarité (voir pedagogie/)
+            <Pedagogie section={view} admin={admin} refreshKey={revision} onNotice={setNotice} onSessionExpired={sessionExpired} />
           ) : admin ? (
             <>
               {overview && <MetricCards data={data} loading={loading} year={year} onSelect={selectSection} />}
@@ -809,6 +1046,9 @@ export default function DashboardPage() {
                   onPrevious={() => { setPage(p => p - 1); setLoading(true) }}
                   onNext={() => { setPage(p => p + 1); setLoading(true) }}
                   onCreate={setForm}
+                  actions={rowActions}
+                  archives={archives}
+                  onToggleArchives={value => { setArchives(value); setPage(1); setLoading(true) }}
                 />
 
                 {overview && (
@@ -821,11 +1061,15 @@ export default function DashboardPage() {
             </>
           ) : (
             <>
-              <PersonalRecords user={user} records={myRecords} loading={loading} error={error} />
+              {/* Oustaz : accès direct à son travail quotidien */}
+              {user?.role === 'oustaz' && <OustazShortcuts onSelect={selectSection} />}
+              <PersonalRecords user={user} records={myRecords} loading={loading} error={error} onOpenSynthese={setSynthese} />
               {/* Tuteur : mensualités de ses enfants */}
               {user?.role === 'tuteur' && <TuteurPaiements refreshKey={revision} />}
             </>
           )}
+
+          </Suspense>
 
           <footer className="db-footer">
             <span>© {new Date().getFullYear()} {t('common.instituteName')}</span>
@@ -844,6 +1088,45 @@ export default function DashboardPage() {
           year={data.annee_scolaire_courante}
           onClose={() => setForm(null)}
           onSaved={saved}
+          onSessionExpired={sessionExpired}
+        />
+      )}
+      <Suspense fallback={null}>
+      {detail?.kind === 'eleve' && (
+        <EleveDetail
+          key={detail.record.id}
+          id={detail.record.id}
+          year={data?.annee_scolaire_courante}
+          classes={data?.options.classes ?? []}
+          modes={data?.options.paiement?.modes ?? ['especes']}
+          onClose={() => setDetail(detail.from ?? null)}
+          onChanged={detailChanged}
+          onSessionExpired={sessionExpired}
+        />
+      )}
+      {detail?.kind === 'user' && (
+        <UserDetail id={detail.record.id} currentUserId={user?.id} onClose={() => setDetail(null)} onChanged={detailChanged} onSessionExpired={sessionExpired} />
+      )}
+      {detail?.kind === 'classe' && (
+        <ClasseDetail
+          key={detail.record.id}
+          classe={detail.record}
+          initialMode={detail.mode}
+          oustazs={data?.options.oustazs ?? []}
+          onClose={() => setDetail(null)}
+          onChanged={detailChanged}
+          onOpenEleve={openEleveFrom(detail)}
+          onSessionExpired={sessionExpired}
+        />
+      )}
+      {synthese && <SyntheseDialog eleve={synthese} onClose={() => setSynthese(null)} onSessionExpired={sessionExpired} />}
+      </Suspense>
+      {photoTarget && (
+        <PhotoDialog
+          kind={photoTarget.kind}
+          record={photoTarget.record}
+          onClose={() => setPhotoTarget(null)}
+          onSaved={message => { setPhotoTarget(null); setNotice(message); refresh() }}
           onSessionExpired={sessionExpired}
         />
       )}

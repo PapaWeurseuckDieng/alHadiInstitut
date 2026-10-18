@@ -8,6 +8,7 @@ use App\Models\ClasseAcademique;
 use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\Planning;
+use App\Services\PhotoProfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -124,6 +125,7 @@ class PlanningController extends Controller
                     'matricule' => $eleve->matricule,
                     'nom' => $eleve->nom,
                     'prenom' => $eleve->prenom,
+                    'photo' => PhotoProfil::url($eleve->photo),
                     'statut' => $presences->get($eleve->id)?->statut,
                 ]),
             ],
@@ -189,7 +191,8 @@ class PlanningController extends Controller
         return $classe;
     }
 
-    private function jourSemaine(string $date): string
+    /** Jour de cours d'une date, ou null le jeudi et le vendredi (pas de cours). */
+    private function jourSemaine(string $date): ?string
     {
         return [
             0 => 'dimanche',
@@ -197,7 +200,7 @@ class PlanningController extends Controller
             2 => 'mardi',
             3 => 'mercredi',
             6 => 'samedi',
-        ][Carbon::parse($date)->dayOfWeek];
+        ][Carbon::parse($date)->dayOfWeek] ?? null;
     }
 
     private function planningData(Planning $planning): array

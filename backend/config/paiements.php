@@ -15,6 +15,10 @@ return [
     // Mensualité appliquée quand la classe n'a pas de tarif propre (en FCFA).
     'mensualite_par_defaut' => (int) env('PAIEMENT_MENSUALITE_DEFAUT', 10000),
 
+    // Frais d'inscription quand la classe n'a pas de montant propre (en FCFA).
+    // Le montant n'est jamais saisi à la main : il est fixé par classe dans « Tarifs ».
+    'frais_inscription_par_defaut' => (int) env('PAIEMENT_FRAIS_INSCRIPTION_DEFAUT', 5000),
+
     'devise' => 'FCFA',
 
     // Mois facturés : à partir d'octobre, 10 mois -> octobre à juillet.

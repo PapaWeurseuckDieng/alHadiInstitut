@@ -4,16 +4,20 @@ import { useI18n } from '../../../i18n/useI18n'
 import { getTarifs, updateTarifs } from '../../../services/paiementsService'
 import { usePaymentFormat } from './usePaymentFormat'
 
+// Montants fixés par classe : mensualité et frais d'inscription
+const CHAMPS = [['mensualite', 'defaut'], ['frais_inscription', 'defaut_frais_inscription']]
+
 /**
- * Fenêtre « Mensualités par classe » : montant mensuel de chaque classe de l'année en cours.
- * Un champ vide applique le tarif par défaut (configuré côté serveur).
+ * Fenêtre « Tarifs par classe » : mensualité et frais d'inscription de chaque classe de l'année.
+ * Un champ vide applique le montant par défaut (configuré côté serveur).
+ * Les frais d'inscription ne sont jamais saisis à l'inscription : c'est ce montant qui est encaissé.
  */
 export default function TarifsForm({ onClose, onSaved, onSessionExpired }) {
   const { t, serverMessage, formatNumber } = useI18n()
   const { amount } = usePaymentFormat()
   const dialog = useRef(null)
   const [data, setData] = useState(null)
-  // Valeurs saisies par classe : { [classeId]: '15000' | '' }
+  // Valeurs saisies : { [classeId]: { mensualite: '15000' | '', frais_inscription: '' } }
   const [values, setValues] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -31,7 +35,7 @@ export default function TarifsForm({ onClose, onSaved, onSessionExpired }) {
       .then(response => {
         if (cancelled) return
         setData(response)
-        setValues(Object.fromEntries(response.classes.map(c => [c.id, c.mensualite === null ? '' : String(c.mensualite)])))
+        setValues(Object.fromEntries(response.classes.map(c => [c.id, Object.fromEntries(CHAMPS.map(([champ]) => [champ, c[champ] === null ? '' : String(c[champ])]))])))
       })
       .catch(err => {
         if (cancelled) return
@@ -48,7 +52,7 @@ export default function TarifsForm({ onClose, onSaved, onSessionExpired }) {
     try {
       const response = await updateTarifs(data.classes.map(c => ({
         classe_id: c.id,
-        mensualite: values[c.id] === '' ? null : Number(values[c.id]),
+        ...Object.fromEntries(CHAMPS.map(([champ]) => [champ, values[c.id][champ] === '' ? null : Number(values[c.id][champ])])),
       })))
       onSaved(serverMessage(response.message, 200, { fallback: 'original' }))
     } catch (err) {
@@ -58,13 +62,15 @@ export default function TarifsForm({ onClose, onSaved, onSessionExpired }) {
     }
   }
 
+  const setValue = (classeId, champ, value) => setValues(previous => ({ ...previous, [classeId]: { ...previous[classeId], [champ]: value } }))
+
   return (
     <dialog ref={dialog} className="db-dialog pay-dialog" aria-labelledby="tarifs-title" onCancel={event => { event.preventDefault(); if (!busy) onClose() }}>
       <div className="db-dialog-heading">
         <span className="db-dialog-icon"><Icon name="settings" /></span>
         <div>
           <h2 id="tarifs-title">{t('pay.tarifs.title')}</h2>
-          <p>{data ? t('pay.tarifs.text', { amount: amount(data.defaut) }) : t('dash.loading')}</p>
+          <p>{data ? t('pay.tarifs.text', { amount: amount(data.defaut), fees: amount(data.defaut_frais_inscription) }) : t('dash.loading')}</p>
         </div>
         <button type="button" className="db-icon-button" aria-label={t('form.close')} disabled={busy} onClick={onClose}>
           <Icon name="close" />
@@ -77,24 +83,30 @@ export default function TarifsForm({ onClose, onSaved, onSessionExpired }) {
             {error && <div className="db-alert db-alert--error" role="alert"><strong>{error}</strong></div>}
             {data && !data.classes.length && <p className="db-form-note">{t('pay.tarifs.empty')}</p>}
             {data?.classes.map(classe => (
-              <div className="pay-tarif" key={classe.id}>
-                <label htmlFor={`tarif-${classe.id}`}>
+              <div className="pay-tarif pay-tarif--double" key={classe.id}>
+                <span className="pay-tarif-name">
                   <strong>{classe.nom}</strong>
                   <small>{classe.niveau}</small>
-                </label>
-                <div className="pay-amount-field">
-                  <input
-                    id={`tarif-${classe.id}`}
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    step="500"
-                    placeholder={`${formatNumber(data.defaut)} (${t('pay.tarifs.placeholder')})`}
-                    value={values[classe.id] ?? ''}
-                    onChange={event => setValues(v => ({ ...v, [classe.id]: event.target.value }))}
-                  />
-                  <span className="pay-currency">FCFA</span>
-                </div>
+                </span>
+                {CHAMPS.map(([champ, defaut]) => (
+                  <div className="pay-tarif-field" key={champ}>
+                    <label htmlFor={`tarif-${champ}-${classe.id}`}>{t(`pay.tarifs.${champ}`)}</label>
+                    <div className="pay-amount-field">
+                      <input
+                        id={`tarif-${champ}-${classe.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        step="500"
+                        placeholder={`${formatNumber(data[defaut])} (${t('pay.tarifs.placeholder')})`}
+                        value={values[classe.id]?.[champ] ?? ''}
+                        onChange={event => setValue(classe.id, champ, event.target.value)}
+                        aria-label={`${t(`pay.tarifs.${champ}`)} · ${classe.nom}`}
+                      />
+                      <span className="pay-currency">FCFA</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </fieldset>

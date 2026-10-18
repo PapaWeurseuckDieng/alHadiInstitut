@@ -1,0 +1,210 @@
+/* ==========================================================================
+   Diplôme : affichage à l'écran + impression A4 paysage (ou PDF).
+   ========================================================================== */
+
+.dip-page {
+  --dip-green: var(--color-primary, #0f5132);
+  --dip-gold: var(--color-accent, #ca8a04);
+  --dip-red: var(--color-danger, #991b1b);
+
+  min-height: 100svh;
+  padding: 24px 16px 48px;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #0f172a);
+}
+
+.dip-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1000px;
+  margin: 0 auto 20px;
+}
+
+.dip-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dip-error,
+.dip-loading {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.dip {
+  position: relative;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 18px;
+  border-radius: 6px;
+  background: #fffdf6;
+  box-shadow: 0 20px 50px -24px rgba(15, 23, 42, 0.35);
+}
+
+.dip-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 34px clamp(18px, 5vw, 64px);
+  border: 3px double var(--dip-gold);
+  outline: 2px solid var(--dip-green);
+  outline-offset: 6px;
+  text-align: center;
+}
+
+.dip-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.dip-logo {
+  width: 64px;
+  height: 64px;
+}
+
+.dip-institute {
+  margin: 0;
+  color: var(--dip-green);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dip-basmala {
+  margin: 4px 0 0;
+  color: var(--dip-gold);
+  font-size: 1.2rem;
+}
+
+.dip-number {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.dip-title {
+  margin: 22px 0 6px;
+  color: var(--dip-green);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.5rem, 3.4vw, 2.3rem);
+  line-height: 1.25;
+}
+
+.dip-intro {
+  margin: 8px 0 0;
+  color: #475569;
+  font-style: italic;
+}
+
+.dip-name {
+  margin: 4px 0 0;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--dip-gold);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 700;
+}
+
+.dip-identity {
+  margin: 0;
+  color: #475569;
+}
+
+.dip-mention {
+  margin: 12px 0 0;
+  font-size: 1.1rem;
+}
+
+.dip-mention strong {
+  color: var(--dip-green);
+}
+
+.dip-observations {
+  max-width: 640px;
+  margin: 4px 0 0;
+  color: #475569;
+  font-style: italic;
+}
+
+.dip-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  margin-top: 30px;
+  text-align: start;
+}
+
+.dip-footer div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dip-signature {
+  min-width: 220px;
+  padding-top: 46px;
+  border-top: 1px dashed #94a3b8;
+  text-align: center;
+}
+
+.dip-stamp {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 2;
+  padding: 8px 28px;
+  border: 5px solid var(--dip-red);
+  border-radius: 10px;
+  color: var(--dip-red);
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  opacity: 0.75;
+  transform: translate(-50%, -50%) rotate(-14deg);
+}
+
+.dip--annule .dip-frame {
+  opacity: 0.55;
+}
+
+.dip-cancelled {
+  margin: 14px 0 0;
+  color: var(--dip-red);
+  text-align: center;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  .dip-page {
+    min-height: 0;
+    padding: 0;
+    background: #ffffff !important;
+  }
+
+  .dip-toolbar,
+  .dip-cancelled {
+    display: none !important;
+  }
+
+  .dip {
+    max-width: none;
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

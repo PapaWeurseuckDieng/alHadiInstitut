@@ -1,0 +1,918 @@
+/* ==========================================================================
+   Espace pédagogique : appel, planning, suivi coranique, exemplarité
+   Couleurs et rayons : variables du tableau de bord (DashboardPage.css)
+   ========================================================================== */
+
+.ped {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---------- Classe travaillée ---------- */
+
+.ped-class-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ped-class-picker label {
+  font-weight: 700;
+}
+
+.ped-class-picker select {
+  min-height: 42px;
+  min-width: min(100%, 320px);
+  padding: 0 12px;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+  background: var(--db-surface);
+  font: inherit;
+}
+
+.ped-class-single {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--db-muted);
+}
+
+/* ---------- Barres d'outils et navigation ---------- */
+
+.ped-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.ped-toolbar .db-field {
+  min-width: 11rem;
+}
+
+.ped-toolbar-end {
+  margin-inline-start: auto;
+}
+
+.ped-week-nav {
+  width: fit-content;
+  max-width: 100%;
+  gap: 8px;
+  padding-inline: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ped-month-label {
+  min-width: 10rem;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.ped-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+/* ---------- Boutons segmentés (statut d'appel, note de récitation) ---------- */
+
+.ped-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ped-segment {
+  position: relative;
+  cursor: pointer;
+}
+
+.ped-segment input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ped-segment span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--db-line);
+  border-radius: 999px;
+  background: var(--db-surface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--db-muted);
+}
+
+.ped-segment input:focus-visible + span {
+  outline: 2px solid var(--db-green);
+  outline-offset: 2px;
+}
+
+.ped-segment input:checked + span {
+  border-color: var(--db-green);
+  background: var(--db-green);
+  color: #ffffff;
+}
+
+.ped-segment--absent input:checked + span {
+  border-color: var(--db-red);
+  background: var(--db-red);
+}
+
+.ped-segment--retard input:checked + span,
+.ped-segment--excuse input:checked + span {
+  border-color: var(--db-gold);
+  background: var(--db-gold);
+}
+
+.ped-segment input:disabled + span {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Appel ---------- */
+
+.ped-roll {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ped-roll li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--db-line);
+  border-inline-start-width: 4px;
+  border-radius: 12px;
+}
+
+.ped-roll li.ped-roll--present { border-inline-start-color: var(--db-green); }
+.ped-roll li.ped-roll--absent { border-inline-start-color: var(--db-red); }
+.ped-roll li.ped-roll--retard,
+.ped-roll li.ped-roll--excuse { border-inline-start-color: var(--db-gold); }
+
+.ped-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.ped-count {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--db-line-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.ped-count--present { background: var(--db-green-soft); color: var(--db-green); }
+.ped-count--absent { background: var(--db-red-soft); color: var(--db-red); }
+
+.ped-missing {
+  color: var(--db-gold);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  align-self: center;
+}
+
+/* ---------- Planning : grille de la semaine ---------- */
+
+.ped-week {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ped-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+  background: var(--db-line-soft);
+  min-height: 160px;
+}
+
+.ped-day h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  text-transform: capitalize;
+}
+
+.ped-day-empty {
+  margin: 0;
+  color: var(--db-subtle);
+  font-size: 0.8125rem;
+}
+
+.ped-session {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 10px;
+  border: 1px solid var(--db-line);
+  border-inline-start: 4px solid var(--db-green);
+  border-radius: 10px;
+  background: var(--db-surface);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ped-session:hover {
+  border-color: var(--db-green);
+}
+
+.ped-session-time {
+  grid-column: 1 / -1;
+  color: var(--db-subtle);
+  font-size: 0.8125rem;
+}
+
+.ped-session svg {
+  align-self: center;
+  color: var(--db-subtle);
+}
+
+.ped-day-add {
+  margin-top: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Passage du Coran (sourate + verset → sourate + verset) ---------- */
+
+.ped-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ped-range-part {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ped-range-side {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--db-subtle);
+  text-transform: uppercase;
+}
+
+.ped-range select,
+.ped-range input {
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid var(--db-line);
+  border-radius: 8px;
+  background: var(--db-surface);
+  font: inherit;
+}
+
+.ped-range select {
+  max-width: 14rem;
+}
+
+.ped-range input {
+  width: 5.5rem;
+}
+
+.ped-range [aria-invalid='true'] {
+  border-color: var(--db-red);
+}
+
+.ped-range-arrow {
+  color: var(--db-subtle);
+}
+
+.ped-range-error {
+  flex-basis: 100%;
+}
+
+/* ---------- Fiche hebdomadaire ---------- */
+
+.db-dialog.ped-fiche-dialog {
+  width: min(960px, calc(100vw - 32px));
+}
+
+.ped-objective {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--db-green-soft);
+}
+
+.ped-objective-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--db-green);
+  text-transform: uppercase;
+}
+
+.ped-objective .db-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ped-days {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ped-fiche-day {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--db-line);
+  border-radius: 12px;
+}
+
+.ped-fiche-day--dirty {
+  border-color: var(--db-gold);
+  box-shadow: 0 0 0 1px var(--db-gold-soft);
+}
+
+.ped-fiche-day header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ped-fiche-day h3 {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: capitalize;
+}
+
+.ped-fiche-day > .db-button {
+  justify-self: start;
+}
+
+.ped-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--db-green);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.ped-repere {
+  display: grid;
+  gap: 6px;
+}
+
+.ped-repere-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.ped-grade {
+  align-items: center;
+}
+
+.ped-grade legend {
+  float: inline-start;
+  margin-inline-end: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.ped-grade-hint {
+  color: var(--db-subtle);
+}
+
+/* ---------- Exemplarité ---------- */
+
+.ped-note-select {
+  min-height: 36px;
+  min-width: 4rem;
+  padding: 0 8px;
+  border: 1px solid var(--db-line);
+  border-radius: 8px;
+  background: var(--db-surface);
+  font: inherit;
+}
+
+.ped-row--dirty td {
+  background: var(--db-gold-soft);
+}
+
+.ped-score-total {
+  display: block;
+  color: var(--db-subtle);
+}
+
+/* ---------- Petits écrans ---------- */
+
+@media (max-width: 900px) {
+  .ped-week {
+    grid-template-columns: 1fr;
+  }
+
+  .ped-day {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .ped-roll li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ped-segment span {
+    min-width: 0;
+    padding: 0 10px;
+  }
+
+  .ped-toolbar-end {
+    margin-inline-start: 0;
+  }
+
+  .ped-range select {
+    max-width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Barres de score (Élève du mois, exemplarité)
+   ========================================================================== */
+
+.score-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.score-bar--none {
+  min-width: 0;
+  color: var(--db-subtle);
+}
+
+.score-bar-track {
+  position: relative;
+  flex: 1;
+  min-width: 56px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--db-line-soft);
+}
+
+.score-bar--large .score-bar-track {
+  height: 12px;
+}
+
+.score-bar-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: inherit;
+  background: var(--score-color);
+}
+
+.score-bar-value {
+  min-width: 2.6em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.score-bar--large .score-bar-value {
+  font-size: 1.1rem;
+}
+
+.score-bar-level {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--score-color);
+  background: color-mix(in srgb, var(--score-color) 12%, transparent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.score-bar--excellent { --score-color: #15803d; }
+.score-bar--good { --score-color: #0f766e; }
+.score-bar--fair { --score-color: #b45309; }
+.score-bar--low { --score-color: #b91c1c; }
+
+/* ==========================================================================
+   Élève du mois
+   ========================================================================== */
+
+.edm-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.edm-winner,
+.edm-best-class {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 16px;
+}
+
+.edm-winner {
+  background: linear-gradient(135deg, var(--db-green), var(--db-green-dark));
+  color: #ffffff;
+}
+
+.edm-best-class {
+  border: 2px solid var(--db-gold);
+  background: #fffbeb;
+}
+
+.edm-winner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.edm-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #422006;
+  background: var(--db-gold);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.edm-ribbon--green {
+  color: #ffffff;
+  background: var(--db-green);
+}
+
+.edm-score {
+  text-align: end;
+  line-height: 1.1;
+}
+
+.edm-score strong {
+  display: block;
+  color: var(--db-gold);
+  font-size: 2.1rem;
+}
+
+.edm-best-class .edm-score strong {
+  color: var(--db-green);
+}
+
+.edm-score span {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.edm-winner-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.edm-winner .db-avatar {
+  width: 72px;
+  height: 72px;
+  border: 3px solid var(--db-gold);
+  font-size: 1.35rem;
+}
+
+.edm-winner h2,
+.edm-best-class h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.edm-winner p,
+.edm-best-class p {
+  margin: 2px 0 0;
+}
+
+.edm-winner p {
+  opacity: 0.85;
+}
+
+.edm-best-meta {
+  color: var(--db-muted);
+  font-size: 0.9rem;
+}
+
+.edm-components {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+}
+
+.edm-components div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) 2fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.edm-components dt small {
+  opacity: 0.7;
+}
+
+.edm-components dd {
+  margin: 0;
+}
+
+.edm-winner .score-bar-track {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.edm-winner .score-bar {
+  --score-color: var(--db-gold) !important;
+}
+
+.edm-winner .db-button--secondary {
+  color: var(--db-green-dark);
+}
+
+.db-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--db-line-soft);
+}
+
+.db-segmented button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--db-muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.db-segmented button.is-active {
+  color: var(--db-green);
+  background: var(--db-surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.edm-classes {
+  display: grid;
+  gap: 14px;
+}
+
+.edm-class {
+  padding: 14px;
+  border: 1px solid var(--db-line);
+  border-radius: 14px;
+}
+
+.edm-class--best {
+  border: 2px solid var(--db-gold);
+  background: #fffdf5;
+}
+
+.edm-class header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.edm-class header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.edm-class header p {
+  margin: 2px 0 0;
+  color: var(--db-muted);
+  font-size: 0.88rem;
+}
+
+.edm-class-average {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 220px;
+  color: var(--db-muted);
+  font-size: 0.85rem;
+}
+
+.edm-class-average .score-bar {
+  min-width: 200px;
+}
+
+.edm-class-best {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: #92400e;
+}
+
+.edm-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--db-line-soft);
+  font-weight: 800;
+}
+
+.edm-rank--1 {
+  color: #ffffff;
+  background: var(--db-gold);
+}
+
+.edm-rank--2 {
+  color: #ffffff;
+  background: #94a3b8;
+}
+
+.edm-rank--3 {
+  color: #ffffff;
+  background: #b45309;
+}
+
+.edm-row--first td {
+  background: #fffbeb;
+}
+
+.edm-table th small {
+  color: var(--db-subtle);
+  font-weight: 500;
+}
+
+.edm-total {
+  font-size: 1.05rem;
+}
+
+/* ==========================================================================
+   Fiches : historique, demandes de modification
+   ========================================================================== */
+
+.ped-fiche-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--db-muted);
+  font-size: 0.85rem;
+  list-style: none;
+}
+
+.ped-fiche-history li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ped-request {
+  margin-bottom: 10px;
+  border-color: var(--db-gold);
+  background: #fffbeb;
+}
+
+.ped-requests {
+  margin: 0 0 16px;
+  padding: 14px;
+  border: 1px solid var(--db-gold);
+  border-radius: 12px;
+  background: #fffbeb;
+}
+
+.ped-requests h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #92400e;
+  font-size: 1rem;
+}
+
+.ped-requests ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ped-requests li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--db-surface);
+}
+
+.ped-requests small {
+  display: block;
+  color: var(--db-muted);
+}
+
+/* ==========================================================================
+   Exemplarité : notes colorées, échelle, total et moyenne de la classe
+   ========================================================================== */
+
+.ped-note-select[data-note="0"] { border-color: #fca5a5; background: #fef2f2; }
+.ped-note-select[data-note="1"] { border-color: #fdba74; background: #fff7ed; }
+.ped-note-select[data-note="2"] { border-color: #fcd34d; background: #fffbeb; }
+.ped-note-select[data-note="3"] { border-color: #86efac; background: #f0fdf4; }
+.ped-note-select[data-note="4"] { border-color: #16a34a; background: #dcfce7; font-weight: 700; }
+
+.ped-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.ped-scale li {
+  padding: 3px 10px;
+  border: 1px solid var(--db-line);
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.ped-scale li[data-note="0"] { background: #fef2f2; }
+.ped-scale li[data-note="1"] { background: #fff7ed; }
+.ped-scale li[data-note="2"] { background: #fffbeb; }
+.ped-scale li[data-note="3"] { background: #f0fdf4; }
+.ped-scale li[data-note="4"] { background: #dcfce7; }
+
+.ped-exemplarite tfoot td {
+  background: var(--db-line-soft);
+  font-weight: 700;
+}
+
+.ped-score-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.ped-score-cell small {
+  color: var(--db-muted);
+}

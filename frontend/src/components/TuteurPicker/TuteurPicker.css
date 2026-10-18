@@ -1,0 +1,94 @@
+/* Recherche d'un tuteur existant */
+.tp {
+  position: relative;
+}
+
+.tp-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.tp-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tp-input > svg {
+  position: absolute;
+  inset-inline-start: 12px;
+  color: var(--db-subtle, #64748b);
+  pointer-events: none;
+}
+
+.db-field .tp-input input {
+  width: 100%;
+  padding-inline-start: 38px;
+}
+
+.tp-help {
+  color: var(--db-subtle, #64748b);
+  font-size: 0.8rem;
+}
+
+.tp-list {
+  position: absolute;
+  z-index: 30;
+  inset-inline: 0;
+  top: calc(100% - 18px);
+  max-height: 280px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--db-line, #e2e8f0);
+  border-radius: 12px;
+  background: var(--db-surface, #fff);
+  box-shadow: 0 18px 40px -12px rgba(15, 23, 42, 0.3);
+}
+
+.tp-option,
+.tp-selected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.tp-option {
+  cursor: pointer;
+}
+
+.tp-option--active {
+  background: var(--db-green-soft, #e8f1ec);
+}
+
+.tp-selected {
+  border: 1px solid var(--db-green, #0f5132);
+  background: var(--db-green-soft, #e8f1ec);
+}
+
+.tp-person {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.tp-person small {
+  overflow: hidden;
+  color: var(--db-muted, #475569);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tp-note {
+  padding: 10px;
+  color: var(--db-muted, #475569);
+  font-size: 0.9rem;
+}
+
+.tp-note--error {
+  color: var(--db-red, #991b1b);
+}

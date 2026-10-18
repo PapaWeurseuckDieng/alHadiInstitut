@@ -1,0 +1,42 @@
+/* Rubrique Diplômes : reprend la mise en page des Paiements (Paiements.css) */
+
+.dip-section .pay-toolbar .db-form-note {
+  margin: 0;
+  max-width: 640px;
+}
+
+.dip-row--cancelled td {
+  opacity: 0.6;
+}
+
+.dip-mention {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #92400e;
+  background: #fef3c7;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Fenêtre de délivrance : élève choisi et résultats de la recherche */
+.dip-student {
+  margin-bottom: 14px;
+}
+
+.dip-results {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  margin: 6px 0 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--db-line);
+  border-radius: 10px;
+}
+
+.dip-results .db-person-link {
+  width: 100%;
+  margin: 0;
+}

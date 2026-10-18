@@ -49,9 +49,31 @@ async function lireJson(response) {
 }
 
 /**
+ * Convertit un objet en FormData (envoi d'une photo) avec la notation attendue par Laravel :
+ * { tuteurs: [{ compte: { nom: 'Diop' } }] } -> « tuteurs[0][compte][nom] = Diop ».
+ * Les valeurs null/undefined sont omises, les booléens envoyés en 1 / 0.
+ * @param {Record<string, unknown>} objet
+ * @returns {FormData}
+ */
+export function toFormData(objet) {
+  const formulaire = new FormData()
+  const ajouter = (cle, valeur) => {
+    if (valeur === null || valeur === undefined) return
+    if (valeur instanceof Blob) formulaire.append(cle, valeur, valeur.name || 'photo.jpg')
+    else if (Array.isArray(valeur)) valeur.forEach((element, index) => ajouter(`${cle}[${index}]`, element))
+    else if (typeof valeur === 'object') Object.entries(valeur).forEach(([sousCle, element]) => ajouter(`${cle}[${sousCle}]`, element))
+    else if (typeof valeur === 'boolean') formulaire.append(cle, valeur ? '1' : '0')
+    else formulaire.append(cle, String(valeur))
+  }
+  Object.entries(objet).forEach(([cle, valeur]) => ajouter(cle, valeur))
+  return formulaire
+}
+
+/**
  * Effectue une requête vers l'API.
  * @param {string} chemin  Chemin relatif, ex. "/auth/login"
  * @param {{ method?: string, body?: unknown, token?: string }} [options]
+ *   body : objet envoyé en JSON, ou FormData (multipart, pour les photos)
  * @returns {Promise<any>} Corps JSON de la réponse en cas de succès
  * @throws {ApiError}
  */
@@ -60,15 +82,18 @@ export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
     throw new ApiError(translate('errors.noApiUrl'), 0)
   }
 
+  const multipart = body instanceof FormData
   const controleur = new AbortController()
-  const minuteur = setTimeout(() => controleur.abort(), DELAI_MAX_MS)
+  // Un envoi de photo sur une connexion lente peut prendre plus de temps
+  const minuteur = setTimeout(() => controleur.abort(), multipart ? DELAI_MAX_MS * 4 : DELAI_MAX_MS)
 
   const entetes = {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
     // Langue de l'interface : permettra au backend de répondre en arabe s'il est traduit un jour
     'Accept-Language': getLanguage(),
   }
+  // Multipart : le navigateur fixe lui-même Content-Type (avec la frontière entre les champs)
+  if (!multipart) entetes['Content-Type'] = 'application/json'
   // Le token Sanctum est transmis en Bearer pour les routes protégées.
   if (token) entetes.Authorization = `Bearer ${token}`
 
@@ -77,7 +102,10 @@ export async function apiRequest(chemin, { method = 'GET', body, token } = {}) {
     response = await fetch(`${API_URL}${chemin}`, {
       method,
       headers: entetes,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
+      // Données toujours fraîches ; évite aussi que le navigateur mette en attente
+      // deux requêtes identiques simultanées (verrou du cache HTTP)
+      cache: 'no-store',
       signal: controleur.signal,
     })
   } catch {

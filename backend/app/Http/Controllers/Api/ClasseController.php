@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\ClasseAcademique;
 use App\Models\Inscription;
 use App\Models\Oustaz;
+use App\Services\PhotoProfil;
 use App\Support\AnneeScolaire;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,6 +57,8 @@ class ClasseController extends Controller
                     : null,
                 'effectif' => $classe->inscriptions_count,
                 'is_archived' => $classe->is_archived,
+                'mensualite' => $classe->mensualiteAppliquee(),
+                'frais_inscription' => $classe->fraisInscriptionAppliques(),
             ]),
             'pagination' => [
                 'page' => $page->currentPage(),
@@ -72,6 +75,9 @@ class ClasseController extends Controller
             'niveau' => ['required', 'string', 'max:80'],
             'annee_scolaire' => ['prohibited'],
             'oustaz_id' => ['required', 'integer', 'exists:oustazs,id'],
+            // Montants propres à la classe (vide = montants par défaut de config/paiements.php)
+            'mensualite' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
+            'frais_inscription' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
             'inscription_ids' => ['sometimes', 'array'],
             'inscription_ids.*' => ['required', 'integer', 'distinct', 'exists:inscriptions,id'],
         ]);
@@ -115,6 +121,8 @@ class ClasseController extends Controller
                 'oustaz_id' => $oustaz->id,
                 'effectif' => count($inscriptionIds),
                 'statut' => 'active',
+                'mensualite' => $data['mensualite'] ?? null,
+                'frais_inscription' => $data['frais_inscription'] ?? null,
             ]);
 
             if ($inscriptionIds !== []) {
@@ -154,6 +162,8 @@ class ClasseController extends Controller
                     'telephone' => $classe->oustaz->user->telephone,
                 ],
                 'effectif' => $classe->inscriptions->count(),
+                'mensualite' => $classe->mensualiteAppliquee(),
+                'frais_inscription' => $classe->fraisInscriptionAppliques(),
                 'eleves' => $classe->inscriptions->map(fn (Inscription $inscription) => [
                     'inscription_id' => $inscription->id,
                     'eleve_id' => $inscription->eleve->id,
@@ -171,6 +181,8 @@ class ClasseController extends Controller
             'nom' => ['sometimes', 'required', 'string', 'max:120'],
             'niveau' => ['sometimes', 'required', 'string', 'max:80'],
             'oustaz_id' => ['sometimes', 'required', 'integer', 'exists:oustazs,id'],
+            'mensualite' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
+            'frais_inscription' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000000'],
             'annee_scolaire' => ['prohibited'],
         ]);
 
@@ -185,7 +197,7 @@ class ClasseController extends Controller
                 $classe->oustaz_id = $oustaz->id;
             }
 
-            foreach (['nom', 'niveau'] as $field) {
+            foreach (['nom', 'niveau', 'mensualite', 'frais_inscription'] as $field) {
                 if (array_key_exists($field, $data)) {
                     $classe->{$field} = $data[$field];
                 }
@@ -210,6 +222,10 @@ class ClasseController extends Controller
                 'niveau' => $classe->niveau,
                 'annee_scolaire' => $classe->annee_scolaire,
                 'oustaz_id' => $classe->oustaz_id,
+                'mensualite' => $classe->mensualiteAppliquee(),
+                'frais_inscription' => $classe->fraisInscriptionAppliques(),
+                'mensualite_propre' => $classe->mensualite !== null,
+                'frais_inscription_propres' => $classe->frais_inscription !== null,
             ],
         ]);
     }
@@ -219,6 +235,8 @@ class ClasseController extends Controller
         $filters = $request->validate([
             'include_archived' => ['sometimes', 'boolean'],
             'page' => ['sometimes', 'integer', 'min:1'],
+            // Jusqu'à 200 élèves par page : l'appel, les fiches et l'exemplarité affichent toute la classe
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:200'],
         ]);
         if ($request->user()->role->value !== 'admin' && ($filters['include_archived'] ?? false)) {
             return response()->json(['message' => 'Seul un administrateur peut consulter les archives.'], 403);
@@ -243,7 +261,7 @@ class ClasseController extends Controller
                 fn ($eleves) => $eleves->where('is_archived', false),
             ))
             ->orderBy('id')
-            ->paginate(20);
+            ->paginate($filters['per_page'] ?? 20);
 
         return response()->json([
             'data' => $page->getCollection()->map(fn (Inscription $inscription) => [
@@ -252,6 +270,7 @@ class ClasseController extends Controller
                 'nom' => $inscription->eleve->nom,
                 'prenom' => $inscription->eleve->prenom,
                 'sexe' => $inscription->eleve->sexe,
+                'photo' => PhotoProfil::url($inscription->eleve->photo),
                 'inscription_id' => $inscription->id,
             ]),
             'pagination' => [
@@ -286,6 +305,7 @@ class ClasseController extends Controller
                     'matricule' => $inscription->eleve->matricule,
                     'nom' => $inscription->eleve->nom,
                     'prenom' => $inscription->eleve->prenom,
+                    'photo' => PhotoProfil::url($inscription->eleve->photo),
                 ]),
             ]),
         ]);
